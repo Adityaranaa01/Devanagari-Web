@@ -7,7 +7,7 @@ import millets from "../assets/millet.png";
 import grinding from "../assets/grinding1.png"; 
 import finepowder from "../assets/powderMix.png .png"; 
 import heromain3 from "../assets/heromain3.png"
-import heroVideo from "../assets/videos/hero-bg.mp4";
+import heroVideo from "../assets/videos/compressed-hero-bg.mp4";
 
 const Home = () => {
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
