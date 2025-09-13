@@ -1,0 +1,542 @@
+import { supabase } from '../lib/supabaseClient';
+
+export type Product = {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image_url: string;
+  stock: number;
+  weight: number; // in grams
+  created_at: string;
+};
+
+export type CartItem = {
+  id: string;
+  user_id: string;
+  product_id: string;
+  quantity: number;
+  product?: Product;
+};
+
+export type Order = {
+  id: string;
+  user_id: string;
+  total: number;
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  created_at: string;
+};
+
+export type OrderItem = {
+  id: string;
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  price: number;
+  product?: Product;
+};
+
+// Products Service
+export const productsService = {
+  async getAllProducts(): Promise<Product[]> {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching products:', error);
+      throw new Error('Failed to fetch products');
+    }
+
+    return data || [];
+  },
+
+  async getProductById(id: string): Promise<Product | null> {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('Error fetching product:', error);
+      return null;
+    }
+
+    return data;
+  },
+
+  async createProduct(product: Omit<Product, 'id' | 'created_at'>): Promise<Product> {
+    const { data, error } = await supabase
+      .from('products')
+      .insert(product)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating product:', error);
+      throw new Error('Failed to create product');
+    }
+
+    return data;
+  },
+
+  async ensureSampleProducts(): Promise<Product[]> {
+    // Check if products exist
+    const existingProducts = await this.getAllProducts();
+    
+    if (existingProducts.length > 0) {
+      return existingProducts;
+    }
+
+    // Create sample products if none exist
+    const sampleProducts = [
+      {
+        name: 'Devanagari Health Mix',
+        description: 'A premium blend of 21 natural grains, millets, and pulses, carefully crafted to provide complete nutrition.',
+        price: 19.99,
+        image_url: '/src/assets/shop/First page Flipkart.png',
+        stock: 100,
+        weight: 200
+      },
+      {
+        name: 'Devanagari Health Mix',
+        description: 'A premium blend of 21 natural grains, millets, and pulses, carefully crafted to provide complete nutrition.',
+        price: 29.99,
+        image_url: '/src/assets/shop/First page Flipkart.png',
+        stock: 100,
+        weight: 450
+      },
+      {
+        name: 'Devanagari Health Mix',
+        description: 'A premium blend of 21 natural grains, millets, and pulses, carefully crafted to provide complete nutrition.',
+        price: 49.99,
+        image_url: '/src/assets/shop/First page Flipkart.png',
+        stock: 100,
+        weight: 900
+      }
+    ];
+
+    const createdProducts: Product[] = [];
+    for (const product of sampleProducts) {
+      try {
+        const created = await this.createProduct(product);
+        createdProducts.push(created);
+      } catch (error) {
+        console.error('Error creating sample product:', error);
+      }
+    }
+
+    return createdProducts;
+  }
+};
+
+// Cart Service
+export const cartService = {
+  async getCartItems(userId: string): Promise<CartItem[]> {
+    const { data, error } = await supabase
+      .from('cart_items')
+      .select(`
+        *,
+        product:products(*)
+      `)
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error fetching cart items:', error);
+      throw new Error('Failed to fetch cart items');
+    }
+
+    return data || [];
+  },
+
+  async addToCart(userId: string, productData: {
+    name: string;
+    weight: number;
+    price: number;
+    description?: string;
+    image_url?: string;
+  }, quantity: number = 1): Promise<void> {
+    try {
+      console.log('🛒 Adding to cart:', { productData, quantity, userId });
+
+      // First, test if tables exist
+      const { data: tableTest, error: tableError } = await supabase
+        .from('products')
+        .select('count')
+        .limit(1);
+
+      if (tableError) {
+        console.error('❌ Database table error:', tableError);
+        if (tableError.code === 'PGRST116' || tableError.message.includes('relation') || tableError.message.includes('does not exist')) {
+          throw new Error('Database tables not found. Please run the SQL schema script in your Supabase dashboard first.');
+        }
+        throw new Error(`Database error: ${tableError.message}`);
+      }
+
+      // Ensure user exists in users table before proceeding
+      console.log('👤 Ensuring user exists in database...');
+      const { data: existingUser, error: userCheckError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .single();
+
+      if (userCheckError && userCheckError.code !== 'PGRST116') {
+        console.error('❌ Error checking user:', userCheckError);
+        throw new Error(`Failed to check user: ${userCheckError.message}`);
+      }
+
+      if (!existingUser) {
+        console.log('👤 User not found in database, creating user...');
+        // Get current user from Supabase auth
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !authUser) {
+          throw new Error('User not authenticated. Please sign in again.');
+        }
+
+        // Create user in users table
+        const { error: createUserError } = await supabase
+          .from('users')
+          .insert({
+            id: userId,
+            email: authUser.email || '',
+            full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name,
+            avatar_url: authUser.user_metadata?.avatar_url
+          });
+
+        if (createUserError) {
+          console.error('❌ Error creating user:', createUserError);
+          if (createUserError.code === '23505') {
+            // User already exists (unique constraint violation)
+            console.log('✅ User already exists (race condition)');
+          } else {
+            throw new Error(`Failed to create user: ${createUserError.message}`);
+          }
+        } else {
+          console.log('✅ User created in database');
+        }
+      } else {
+        console.log('✅ User exists in database');
+      }
+
+      // First, ensure the product exists in the database
+      let productId: string;
+      
+      // Check if product already exists
+      const { data: existingProduct, error: productCheckError } = await supabase
+        .from('products')
+        .select('id')
+        .eq('name', productData.name)
+        .eq('weight', productData.weight)
+        .single();
+
+      if (productCheckError && productCheckError.code !== 'PGRST116') {
+        console.error('❌ Error checking existing product:', productCheckError);
+        throw new Error(`Failed to check existing product: ${productCheckError.message}`);
+      }
+
+      if (existingProduct) {
+        // Product exists, use its ID
+        productId = existingProduct.id;
+        console.log('Using existing product ID:', productId);
+      } else {
+        // Create new product
+        const { data: newProduct, error: createError } = await supabase
+          .from('products')
+          .insert({
+            name: productData.name,
+            description: productData.description || 'A premium blend of 21 natural grains, millets, and pulses',
+            price: productData.price,
+            image_url: productData.image_url || '/src/assets/shop/First page Flipkart.png',
+            stock: 100,
+            weight: productData.weight
+          })
+          .select('id')
+          .single();
+
+        if (createError) {
+          console.error('❌ Error creating product:', createError);
+          throw new Error(`Failed to create product: ${createError.message}`);
+        }
+
+        productId = newProduct.id;
+        console.log('✅ Created new product with ID:', productId);
+      }
+
+      // Now add to cart
+      const { data: existingCartItem, error: cartCheckError } = await supabase
+        .from('cart_items')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('product_id', productId)
+        .single();
+
+      if (cartCheckError && cartCheckError.code !== 'PGRST116') {
+        console.error('❌ Error checking existing cart item:', cartCheckError);
+        throw new Error(`Failed to check cart item: ${cartCheckError.message}`);
+      }
+
+      if (existingCartItem) {
+        // Update quantity
+        const { error } = await supabase
+          .from('cart_items')
+          .update({ quantity: existingCartItem.quantity + quantity })
+          .eq('id', existingCartItem.id);
+
+        if (error) {
+          console.error('❌ Error updating cart item:', error);
+          throw new Error(`Failed to update cart item: ${error.message}`);
+        }
+        console.log('✅ Updated existing cart item quantity');
+      } else {
+        // Add new cart item
+        const { error } = await supabase
+          .from('cart_items')
+          .insert({
+            user_id: userId,
+            product_id: productId,
+            quantity
+          });
+
+        if (error) {
+          console.error('❌ Error adding to cart:', error);
+          throw new Error(`Failed to add item to cart: ${error.message}`);
+        }
+        console.log('✅ Added new item to cart');
+      }
+    } catch (error) {
+      console.error('Cart service error:', error);
+      throw error;
+    }
+  },
+
+  async updateCartItemQuantity(cartItemId: string, quantity: number): Promise<void> {
+    console.log('🛒 Updating cart item quantity:', { cartItemId, quantity });
+    
+    if (quantity <= 0) {
+      console.log('Quantity is 0 or negative, removing item instead');
+      await this.removeFromCart(cartItemId);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('cart_items')
+      .update({ quantity })
+      .eq('id', cartItemId)
+      .select();
+
+    if (error) {
+      console.error('❌ Error updating cart item quantity:', error);
+      throw new Error(`Failed to update cart item quantity: ${error.message}`);
+    }
+
+    console.log('✅ Successfully updated cart item quantity:', data);
+  },
+
+  async removeFromCart(cartItemId: string): Promise<void> {
+    const { error } = await supabase
+      .from('cart_items')
+      .delete()
+      .eq('id', cartItemId);
+
+    if (error) {
+      console.error('Error removing cart item:', error);
+      throw new Error('Failed to remove cart item');
+    }
+  },
+
+  async clearCart(userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('cart_items')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error clearing cart:', error);
+      throw new Error('Failed to clear cart');
+    }
+  }
+};
+
+// Orders Service
+export const ordersService = {
+  async createOrder(userId: string, cartItems: CartItem[]): Promise<Order> {
+    // Calculate total
+    const total = cartItems.reduce((sum, item) => {
+      return sum + (item.product?.price || 0) * item.quantity;
+    }, 0);
+
+    // Create order
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .insert({
+        user_id: userId,
+        total,
+        status: 'pending'
+      })
+      .select()
+      .single();
+
+    if (orderError) {
+      console.error('Error creating order:', orderError);
+      throw new Error('Failed to create order');
+    }
+
+    // Create order items
+    const orderItems = cartItems.map(item => ({
+      order_id: order.id,
+      product_id: item.product_id,
+      quantity: item.quantity,
+      price: item.product?.price || 0
+    }));
+
+    const { error: orderItemsError } = await supabase
+      .from('order_items')
+      .insert(orderItems);
+
+    if (orderItemsError) {
+      console.error('Error creating order items:', orderItemsError);
+      throw new Error('Failed to create order items');
+    }
+
+    return order;
+  },
+
+  async getUserOrders(userId: string): Promise<(Order & { order_items: OrderItem[] })[]> {
+    const { data, error } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        order_items (
+          *,
+          product:products(*)
+        )
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching user orders:', error);
+      throw new Error('Failed to fetch orders');
+    }
+
+    return data || [];
+  },
+
+  async updateOrderStatus(orderId: string, status: Order['status']): Promise<void> {
+    const { error } = await supabase
+      .from('orders')
+      .update({ status })
+      .eq('id', orderId);
+
+    if (error) {
+      console.error('Error updating order status:', error);
+      throw new Error('Failed to update order status');
+    }
+  }
+};
+
+// User Service
+export const userService = {
+  async createOrUpdateUser(user: {
+    id: string;
+    email: string;
+    name?: string;
+    avatar_url?: string;
+  }): Promise<void> {
+    try {
+      console.log('Creating/updating user in database:', { id: user.id, email: user.email });
+      
+      // First check if the users table exists by trying a simple select
+      const { error: tableCheckError } = await supabase
+        .from('users')
+        .select('id')
+        .limit(1);
+
+      if (tableCheckError) {
+        if (tableCheckError.code === 'PGRST116' || tableCheckError.message.includes('relation') || tableCheckError.message.includes('does not exist')) {
+          throw new Error('Database tables not found. Please run the SQL schema script in your Supabase dashboard first.');
+        }
+        throw new Error(`Database table error: ${tableCheckError.message}`);
+      }
+      
+      const { error } = await supabase
+        .from('users')
+        .upsert({
+          id: user.id,
+          email: user.email,
+          full_name: user.name,
+          avatar_url: user.avatar_url
+        });
+
+      if (error) {
+        console.error('❌ Error creating/updating user:', error);
+        console.error('Error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        
+        if (error.message.includes('full_name') && error.message.includes('column')) {
+          throw new Error('Database schema mismatch. Please run the SQL schema script in your Supabase dashboard to create the correct table structure.');
+        }
+        
+        throw new Error(`Failed to create/update user: ${error.message}`);
+      }
+      
+      console.log('✅ User successfully created/updated in database');
+    } catch (error) {
+      console.error('❌ User service error:', error);
+      throw error;
+    }
+  },
+
+  async getUser(userId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching user:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in getUser:', error);
+      return null;
+    }
+  },
+
+  async ensureUserExists(user: {
+    id: string;
+    email: string;
+    name?: string;
+    avatar_url?: string;
+  }): Promise<void> {
+    try {
+      // Check if user exists
+      const existingUser = await this.getUser(user.id);
+      
+      if (!existingUser) {
+        // User doesn't exist, create them
+        console.log('User not found in database, creating new user...');
+        await this.createOrUpdateUser(user);
+      } else {
+        // User exists, update their info
+        console.log('User exists in database, updating info...');
+        await this.createOrUpdateUser(user);
+      }
+    } catch (error) {
+      console.error('Error ensuring user exists:', error);
+      throw error;
+    }
+  }
+};
