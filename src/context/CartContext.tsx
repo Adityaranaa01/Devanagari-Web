@@ -8,6 +8,7 @@ type CartContextValue = {
   totalPrice: number;
   loading: boolean;
   addItem: (productData: {
+    id:string;
     name: string;
     weight: number;
     price: number;
@@ -48,31 +49,39 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshCart();
   }, [user]);
 
-  const addItem = async (productData: {
+  // changed here 
+
+  const addItem = async (
+  productData: {
+    id: string;   // ✅ product_id must be passed here
     name: string;
     weight: number;
     price: number;
     description?: string;
     image_url?: string;
-  }, quantity: number = 1) => {
-    if (!user) {
-      throw new Error('User must be logged in to add items to cart');
-    }
+  },
+  quantity: number = 1
+) => {
+  if (!user) throw new Error('User must be logged in to add items to cart');
 
-    try {
-      await cartService.addToCart(user.id, productData, quantity);
-      await refreshCart();
-    } catch (error) {
-      console.error('Error adding item to cart:', error);
-      throw error;
-    }
-  };
+  // 🔍 Find if product already in cart
+  const existing = items.find((i) => i.product_id === productData.id);
+
+  if (existing) {
+    await updateQty(productData.id, existing.quantity + quantity);
+  } else {
+    await cartService.addToCart(user.id, productData, quantity);
+  }
+
+  await refreshCart();
+};
+
 
   const updateQty = async (cartItemId: string, quantity: number) => {
     console.log('🔵 CartContext.updateQty called with:', { cartItemId, quantity });
     
-    if (quantity < 1) {
-      console.log('Quantity cannot be less than 1, removing item instead');
+    if (quantity <= 0) {
+      console.log('Quantity is 0 or negative, removing item instead');
       await removeItem(cartItemId);
       return;
     }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+
 import { motion } from "framer-motion";
 import companyHero from "../assets/company-hero.jpg"; 
 

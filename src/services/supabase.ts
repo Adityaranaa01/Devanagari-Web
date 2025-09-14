@@ -273,10 +273,11 @@ export const cartService = {
         console.log('✅ Created new product with ID:', productId);
       }
 
-      // Now add to cart
+      // Now handle cart item - use UPSERT to handle insert-or-update atomically
+      console.log('🛒 Checking for existing cart item...');
       const { data: existingCartItem, error: cartCheckError } = await supabase
         .from('cart_items')
-        .select('*')
+        .select('id, quantity')
         .eq('user_id', userId)
         .eq('product_id', productId)
         .single();
@@ -287,20 +288,24 @@ export const cartService = {
       }
 
       if (existingCartItem) {
-        // Update quantity
-        const { error } = await supabase
+        // Update quantity - add to existing quantity
+        const newQuantity = existingCartItem.quantity + quantity;
+        console.log(`🔄 Updating existing cart item: ${existingCartItem.quantity} + ${quantity} = ${newQuantity}`);
+        
+        const { error: updateError } = await supabase
           .from('cart_items')
-          .update({ quantity: existingCartItem.quantity + quantity })
+          .update({ quantity: newQuantity })
           .eq('id', existingCartItem.id);
 
-        if (error) {
-          console.error('❌ Error updating cart item:', error);
-          throw new Error(`Failed to update cart item: ${error.message}`);
+        if (updateError) {
+          console.error('❌ Error updating cart item:', updateError);
+          throw new Error(`Failed to update cart item: ${updateError.message}`);
         }
         console.log('✅ Updated existing cart item quantity');
       } else {
         // Add new cart item
-        const { error } = await supabase
+        console.log('➕ Creating new cart item');
+        const { error: insertError } = await supabase
           .from('cart_items')
           .insert({
             user_id: userId,
@@ -308,11 +313,37 @@ export const cartService = {
             quantity
           });
 
-        if (error) {
-          console.error('❌ Error adding to cart:', error);
-          throw new Error(`Failed to add item to cart: ${error.message}`);
+        if (insertError) {
+          console.error('❌ Error adding to cart:', insertError);
+          // If it's a unique constraint violation, try to update instead
+          if (insertError.code === '23505') {
+            console.log('🔄 Unique constraint violation, attempting to update existing item...');
+            const { data: existingItem, error: retryError } = await supabase
+              .from('cart_items')
+              .select('id, quantity')
+              .eq('user_id', userId)
+              .eq('product_id', productId)
+              .single();
+
+            if (retryError) {
+              throw new Error(`Failed to add item to cart: ${insertError.message}`);
+            }
+
+            const { error: updateError } = await supabase
+              .from('cart_items')
+              .update({ quantity: existingItem.quantity + quantity })
+              .eq('id', existingItem.id);
+
+            if (updateError) {
+              throw new Error(`Failed to update cart item: ${updateError.message}`);
+            }
+            console.log('✅ Updated existing cart item after unique constraint violation');
+          } else {
+            throw new Error(`Failed to add item to cart: ${insertError.message}`);
+          }
+        } else {
+          console.log('✅ Added new item to cart');
         }
-        console.log('✅ Added new item to cart');
       }
     } catch (error) {
       console.error('Cart service error:', error);
@@ -329,10 +360,34 @@ export const cartService = {
       return;
     }
 
+    // First, verify the cart item exists and belongs to the current user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      throw new Error('User not authenticated');
+    }
+
+    const { data: existingItem, error: checkError } = await supabase
+      .from('cart_items')
+      .select('id, user_id')
+      .eq('id', cartItemId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (checkError) {
+      console.error('❌ Error checking cart item:', checkError);
+      throw new Error(`Cart item not found or access denied: ${checkError.message}`);
+    }
+
+    if (!existingItem) {
+      throw new Error('Cart item not found or access denied');
+    }
+
+    // Update the quantity
     const { data, error } = await supabase
       .from('cart_items')
       .update({ quantity })
       .eq('id', cartItemId)
+      .eq('user_id', user.id) // Double-check user ownership
       .select();
 
     if (error) {
@@ -344,15 +399,26 @@ export const cartService = {
   },
 
   async removeFromCart(cartItemId: string): Promise<void> {
+    console.log('🗑️ Removing cart item:', cartItemId);
+    
+    // First, verify the cart item exists and belongs to the current user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      throw new Error('User not authenticated');
+    }
+
     const { error } = await supabase
       .from('cart_items')
       .delete()
-      .eq('id', cartItemId);
+      .eq('id', cartItemId)
+      .eq('user_id', user.id); // Ensure user can only delete their own items
 
     if (error) {
-      console.error('Error removing cart item:', error);
-      throw new Error('Failed to remove cart item');
+      console.error('❌ Error removing cart item:', error);
+      throw new Error(`Failed to remove cart item: ${error.message}`);
     }
+    
+    console.log('✅ Successfully removed cart item');
   },
 
   async clearCart(userId: string): Promise<void> {

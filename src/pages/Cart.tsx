@@ -182,15 +182,11 @@ const Cart = () => {
                         onClick={() => {
                           console.log('🔴 MINUS BUTTON CLICKED!');
                           console.log('Item details:', { id: item.id, quantity: item.quantity, product_id: item.product_id });
-                          if (item.quantity > 1) {
-                            console.log('Decreasing quantity for item:', item.id, 'from', item.quantity, 'to', item.quantity - 1);
-                            updateQty(item.id, item.quantity - 1);
-                          } else {
-                            console.log('Quantity is 1, cannot decrease further');
-                          }
+                          const newQuantity = item.quantity - 1;
+                          console.log('Decreasing quantity for item:', item.id, 'from', item.quantity, 'to', newQuantity);
+                          updateQty(item.product_id, newQuantity);
                         }}
-                        disabled={item.quantity <= 1}
-                        className="w-10 h-10 rounded-full border-2 border-[#4A5C3D] flex items-center justify-center text-[#4A5C3D] hover:bg-[#4A5C3D] hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-10 h-10 rounded-full border-2 border-[#4A5C3D] flex items-center justify-center text-[#4A5C3D] hover:bg-[#4A5C3D] hover:text-white transition-colors"
                       >
                         <Minus size={16} />
                       </button>
@@ -202,7 +198,7 @@ const Cart = () => {
                           console.log('🔴 PLUS BUTTON CLICKED!');
                           console.log('Item details:', { id: item.id, quantity: item.quantity, product_id: item.product_id });
                           console.log('Increasing quantity for item:', item.id, 'from', item.quantity, 'to', item.quantity + 1);
-                          updateQty(item.id, item.quantity + 1);
+                          updateQty(item.product_id, item.quantity + 1);
                         }}
                         className="w-10 h-10 rounded-full border-2 border-[#4A5C3D] flex items-center justify-center text-[#4A5C3D] hover:bg-[#4A5C3D] hover:text-white transition-colors"
                       >

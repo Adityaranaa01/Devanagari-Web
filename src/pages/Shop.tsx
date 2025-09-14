@@ -6,6 +6,7 @@ import { checkDatabaseSetup } from '../utils/databaseCheck';
 import { checkDatabaseStatus, getDatabaseSetupInstructions, DatabaseStatus } from '../utils/databaseSetupHelper';
 import '../utils/debugDatabase'; // Import debug utility
 import '../utils/verifyDatabase'; // Import verification utility
+import '../utils/testCartLogic'; // Import cart test utility
 
 const Shop = () => {
   const [loading, setLoading] = useState(true);
@@ -73,17 +74,20 @@ const Shop = () => {
         image_url: '/src/assets/shop/First page Flipkart.png'
       };
 
-      console.log('Adding to cart:', { productData, quantity, userId: user.id });
+      console.log('🛒 Shop: Adding to cart:', { productData, quantity, userId: user.id });
       
       // This will create the product in the database if it doesn't exist, then add to cart
+      // The cartService.addToCart method handles insert-or-update logic automatically
       await addItem(productData, quantity);
+      
+      console.log('✅ Shop: Successfully added to cart');
       
       // Show success feedback
       setShowSuccess(productKey);
       setTimeout(() => setShowSuccess(null), 3000);
       
     } catch (error) {
-      console.error('Error adding to cart:', error);
+      console.error('❌ Shop: Error adding to cart:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       
       // Show more specific error messages
@@ -155,6 +159,15 @@ const Shop = () => {
                 className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
               >
                 Verify Setup
+              </button>
+              <button
+                onClick={() => {
+                  console.log('Testing cart logic...');
+                  (window as any).testCartLogic?.();
+                }}
+                className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors"
+              >
+                Test Cart Logic
               </button>
             </div>
           </div>
