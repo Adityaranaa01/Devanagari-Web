@@ -105,35 +105,68 @@ const Profile = () => {
             ) : (
               <div className="space-y-4">
                 {orders.map((order) => (
-                  <div key={order.id} className="border border-gray-200 rounded-lg p-4">
+                  <div key={order.id} className="border border-gray-200 rounded-lg p-4 hover:border-[#4A5C3D] transition-colors">
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <h3 className="font-semibold text-[#4A5C3D]">Order #{order.id.slice(0, 8)}</h3>
                         <p className="text-sm text-gray-600">
                           {new Date(order.created_at).toLocaleDateString()}
                         </p>
+                        {order.payment_id && (
+                          <p className="text-xs text-gray-500">
+                            Payment ID: {order.payment_id.slice(0, 20)}...
+                          </p>
+                        )}
                       </div>
                       <div className="text-right">
                         <div className="font-semibold text-[#4A5C3D]">${order.total.toFixed(2)}</div>
-                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                          order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
-                          order.status === 'shipped' ? 'bg-purple-100 text-purple-800' :
-                          order.status === 'delivered' ? 'bg-green-100 text-green-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                        </span>
+                        <div className="flex space-x-1 mt-1">
+                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                            order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
+                            order.status === 'shipped' ? 'bg-purple-100 text-purple-800' :
+                            order.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                          </span>
+                          {order.payment_status && (
+                            <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                              order.payment_status === 'paid' ? 'bg-green-100 text-green-800' :
+                              order.payment_status === 'failed' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {order.payment_status.charAt(0).toUpperCase() + order.payment_status.slice(1)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     
-                    <div className="space-y-2">
+                    <div className="space-y-2 mb-3">
                       {order.order_items.map((item) => (
                         <div key={item.id} className="flex justify-between text-sm">
                           <span>{item.product?.name || 'Product'} × {item.quantity}</span>
                           <span>${item.price.toFixed(2)}</span>
                         </div>
                       ))}
+                    </div>
+
+                    <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                      <div className="flex space-x-2 text-xs text-gray-500">
+                        {order.payment_method && (
+                          <span>Payment: {order.payment_method}</span>
+                        )}
+                        {order.currency && (
+                          <span>Currency: {order.currency}</span>
+                        )}
+                      </div>
+                      <a
+                        href={`/order/${order.id}`}
+                        className="text-sm text-[#4A5C3D] hover:text-[#3a4a2f] font-medium"
+                      >
+                        View Details →
+                      </a>
                     </div>
                   </div>
                 ))}
