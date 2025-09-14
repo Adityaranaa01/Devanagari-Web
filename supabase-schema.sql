@@ -43,6 +43,12 @@ CREATE TABLE IF NOT EXISTS public.orders (
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
     total DECIMAL(10,2) NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled')),
+    payment_id TEXT, -- Razorpay payment ID
+    payment_order_id TEXT, -- Razorpay order ID
+    payment_signature TEXT, -- Razorpay signature for verification
+    payment_status TEXT DEFAULT 'pending' CHECK (payment_status IN ('pending', 'paid', 'failed', 'refunded')),
+    payment_method TEXT DEFAULT 'razorpay',
+    currency TEXT DEFAULT 'INR',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

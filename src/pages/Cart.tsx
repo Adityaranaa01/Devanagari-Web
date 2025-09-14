@@ -4,6 +4,13 @@ import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { ordersService } from '../services/supabase';
+import RazorpayPayment from '../components/RazorpayPayment';
+
+interface RazorpayPaymentResponse {
+    razorpay_payment_id: string;
+    razorpay_order_id: string;
+    razorpay_signature: string;
+}
 
 const Cart = () => {
   const { items: cartItems, updateQty, removeItem, totalItems, totalPrice, clearCart, loading } = useCart();
@@ -11,6 +18,43 @@ const Cart = () => {
   const [placingOrder, setPlacingOrder] = useState(false);
 
   const getSubtotal = (price: number, qty: number) => price * qty;
+
+  const handlePaymentSuccess = async (paymentResponse: RazorpayPaymentResponse) => {
+    if (!user) {
+      alert('Please sign in to place an order');
+      return;
+    }
+
+    setPlacingOrder(true);
+    try {
+      // Create order with payment information
+      const paymentData = {
+        payment_id: paymentResponse.razorpay_payment_id,
+        payment_order_id: paymentResponse.razorpay_order_id,
+        payment_signature: paymentResponse.razorpay_signature,
+        payment_status: 'paid' as const,
+        payment_method: 'razorpay',
+        currency: 'INR'
+      };
+
+      const order = await ordersService.createOrder(user.id, cartItems, paymentData);
+      await clearCart();
+      
+      const orderTotal = totalPrice + (totalPrice >= 50 ? 0 : 5.99);
+      alert(`Order placed successfully!\n\nOrder ID: ${order.id}\nPayment ID: ${paymentResponse.razorpay_payment_id}\nTotal: $${orderTotal.toFixed(2)}\n\nCustomer: ${user.user_metadata?.full_name || user.email}`);
+    } catch (error) {
+      console.error('Error processing successful payment:', error);
+      alert('Payment successful but order creation failed. Please contact support.');
+    } finally {
+      setPlacingOrder(false);
+    }
+  };
+
+  const handlePaymentError = (error: Error) => {
+    console.error('Payment error:', error);
+    alert(`Payment failed: ${error.message}`);
+    setPlacingOrder(false);
+  };
 
   const handlePlaceOrder = async () => {
     if (!user) {
@@ -23,6 +67,7 @@ const Cart = () => {
       return;
     }
 
+    // For cash on delivery or other payment methods
     setPlacingOrder(true);
     try {
       const order = await ordersService.createOrder(user.id, cartItems);
@@ -231,14 +276,33 @@ const Cart = () => {
                 <p>✓ Secure checkout</p>
               </div>
 
-              {/* Place Order Button */}
-              <button 
-                onClick={handlePlaceOrder}
-                disabled={placingOrder}
-                className="w-full bg-[#4A5C3D] text-white py-4 rounded-lg text-lg font-semibold hover:bg-[#3a4a2f] transition-colors duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {placingOrder ? 'Placing Order...' : `Place Order - $${(totalPrice + (totalPrice >= 50 ? 0 : 5.99)).toFixed(2)}`}
-              </button>
+              {/* Payment Options */}
+              <div className="space-y-3">
+                {/* Razorpay Payment Button */}
+                <RazorpayPayment
+                  amount={totalPrice + (totalPrice >= 50 ? 0 : 5.99)}
+                  currency="USD"
+                  onSuccess={handlePaymentSuccess}
+                  onError={handlePaymentError}
+                  disabled={placingOrder}
+                  className="w-full py-4 text-lg shadow-lg hover:shadow-xl"
+                >
+                  {placingOrder ? (
+                    <span>Processing Order...</span>
+                  ) : (
+                    <span>Pay Now - $${(totalPrice + (totalPrice >= 50 ? 0 : 5.99)).toFixed(2)}</span>
+                  )}
+                </RazorpayPayment>
+
+                {/* Cash on Delivery Button */}
+                <button 
+                  onClick={handlePlaceOrder}
+                  disabled={placingOrder}
+                  className="w-full bg-gray-600 text-white py-4 rounded-lg text-lg font-semibold hover:bg-gray-700 transition-colors duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {placingOrder ? 'Placing Order...' : 'Cash on Delivery'}
+                </button>
+              </div>
 
               {/* Continue Shopping */}
               <Link

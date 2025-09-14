@@ -24,7 +24,14 @@ export type Order = {
   user_id: string;
   total: number;
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  payment_id?: string;
+  payment_order_id?: string;
+  payment_signature?: string;
+  payment_status?: 'pending' | 'paid' | 'failed' | 'refunded';
+  payment_method?: string;
+  currency?: string;
   created_at: string;
+  updated_at?: string;
 };
 
 export type OrderItem = {
@@ -162,7 +169,7 @@ export const cartService = {
       console.log('🛒 Adding to cart:', { productData, quantity, userId });
 
       // First, test if tables exist
-      const { data: tableTest, error: tableError } = await supabase
+      const { error: tableError } = await supabase
         .from('products')
         .select('count')
         .limit(1);
@@ -363,20 +370,35 @@ export const cartService = {
 
 // Orders Service
 export const ordersService = {
-  async createOrder(userId: string, cartItems: CartItem[]): Promise<Order> {
+  async createOrder(userId: string, cartItems: CartItem[], paymentData?: {
+    payment_id?: string;
+    payment_order_id?: string;
+    payment_signature?: string;
+    payment_status?: string;
+    payment_method?: string;
+    currency?: string;
+  }): Promise<Order> {
     // Calculate total
     const total = cartItems.reduce((sum, item) => {
       return sum + (item.product?.price || 0) * item.quantity;
     }, 0);
 
-    // Create order
+    // Create order with payment information
+    const orderData = {
+      user_id: userId,
+      total,
+      status: (paymentData?.payment_status === 'paid' ? 'processing' : 'pending') as Order['status'],
+      payment_id: paymentData?.payment_id,
+      payment_order_id: paymentData?.payment_order_id,
+      payment_signature: paymentData?.payment_signature,
+      payment_status: (paymentData?.payment_status || 'pending') as Order['payment_status'],
+      payment_method: paymentData?.payment_method || 'razorpay',
+      currency: paymentData?.currency || 'INR'
+    };
+
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .insert({
-        user_id: userId,
-        total,
-        status: 'pending'
-      })
+      .insert(orderData)
       .select()
       .single();
 
@@ -403,6 +425,28 @@ export const ordersService = {
     }
 
     return order;
+  },
+
+  async updateOrderPayment(orderId: string, paymentData: {
+    payment_id: string;
+    payment_signature: string;
+    payment_status: string;
+  }): Promise<void> {
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        payment_id: paymentData.payment_id,
+        payment_signature: paymentData.payment_signature,
+        payment_status: paymentData.payment_status,
+        status: paymentData.payment_status === 'paid' ? 'processing' : 'pending',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', orderId);
+
+    if (error) {
+      console.error('Error updating order payment:', error);
+      throw new Error('Failed to update order payment');
+    }
   },
 
   async getUserOrders(userId: string): Promise<(Order & { order_items: OrderItem[] })[]> {
