@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import React, { useEffect } from 'react';
-=======
-
->>>>>>> d017268 (WIP: local changes before pulling)
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -14,11 +10,9 @@ import About from './pages/About';
 import Contact from './pages/Contact';
 import Profile from './pages/Profile';
 
-import OrderStatus from './pages/OrderStatus';
-
+// ✅ Import context providers
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
-
 
 function App() {
   // Load Razorpay script when app starts
@@ -43,35 +37,7 @@ function App() {
 
   return (
     <Router>
-<<<<<<< HEAD
-      <div className="min-h-screen flex flex-col font-['Inter']">
-        <Navbar />
-        <main className="flex-1">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/shop" element={<Shop />} />
-            <Route path="/cart" element={
-              <ProtectedRoute>
-                <Cart />
-              </ProtectedRoute>
-            } />
-            <Route path="/profile" element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            } />
-            <Route path="/about" element={<About />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/order/:orderId" element={
-              <ProtectedRoute>
-                <OrderStatus />
-              </ProtectedRoute>
-            } />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
-=======
+      {/* ✅ Wrap everything inside Auth + Cart providers */}
       <AuthProvider>
         <CartProvider>
           <div className="min-h-screen flex flex-col font-['Inter']">
@@ -80,16 +46,22 @@ function App() {
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/shop" element={<Shop />} />
-                <Route path="/cart" element={
-                  <ProtectedRoute>
-                    <Cart />
-                  </ProtectedRoute>
-                } />
-                <Route path="/profile" element={
-                  <ProtectedRoute>
-                    <Profile />
-                  </ProtectedRoute>
-                } />
+                <Route
+                  path="/cart"
+                  element={
+                    <ProtectedRoute>
+                      <Cart />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <Profile />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route path="/about" element={<About />} />
                 <Route path="/contact" element={<Contact />} />
               </Routes>
@@ -98,7 +70,6 @@ function App() {
           </div>
         </CartProvider>
       </AuthProvider>
->>>>>>> d017268 (WIP: local changes before pulling)
     </Router>
   );
 }
