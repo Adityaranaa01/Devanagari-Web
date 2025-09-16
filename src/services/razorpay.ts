@@ -120,11 +120,21 @@ export interface RazorpayOptions {
   };
   timeout?: number;
   remember_customer?: boolean;
+  method?: {
+    netbanking?: boolean;
+    wallet?: boolean;
+    upi?: boolean;
+    emi?: boolean;
+    card?: boolean;
+  };
 }
 
 export interface RazorpayInstance {
   open(): void;
-  on(event: 'payment.failed', callback: (response: RazorpayFailureResponse) => void): void;
+  on(
+    event: "payment.failed",
+    callback: (response: RazorpayFailureResponse) => void
+  ): void;
   on(event: string, callback: (response: unknown) => void): void;
 }
 
@@ -146,7 +156,8 @@ declare global {
   }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
 
 const razorpayService = {
   async getConfig(): Promise<RazorpayConfig> {
@@ -155,16 +166,16 @@ const razorpayService = {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      return await response.json() as RazorpayConfig;
+      return (await response.json()) as RazorpayConfig;
     } catch (error) {
-      console.error('❌ Failed to get Razorpay config:', error);
-      throw new Error('Failed to get Razorpay configuration');
+      console.error("❌ Failed to get Razorpay config:", error);
+      throw new Error("Failed to get Razorpay configuration");
     }
   },
 
   async createOrder(
-    amountInUSD: number, 
-    cartItems: CartItem[], 
+    amountInUSD: number,
+    cartItems: CartItem[],
     userEmail?: string
   ): Promise<RazorpayOrder> {
     try {
@@ -175,49 +186,57 @@ const razorpayService = {
 
       const orderData = {
         amount: amountInPaise,
-        currency: 'INR',
+        currency: "INR",
         receipt: `receipt_${Date.now()}`,
         notes: {
           user_email: userEmail,
           items_count: cartItems.length,
-          items: JSON.stringify(cartItems.map(item => ({
-            id: item.id,
-            name: item.name,
-            quantity: item.quantity,
-            price_usd: item.price
-          }))),
+          items: JSON.stringify(
+            cartItems.map((item) => ({
+              id: item.id,
+              name: item.name,
+              quantity: item.quantity,
+              price_usd: item.price,
+            }))
+          ),
           original_amount_usd: amountInUSD,
           conversion_rate: usdToInrRate,
-          created_from: 'devanagari_web'
-        }
+          created_from: "devanagari_web",
+        },
       };
 
-      console.log('📦 Creating Razorpay order:', {
+      console.log("📦 Creating Razorpay order:", {
         amount_usd: amountInUSD,
         amount_inr: amountInINR,
         amount_paise: amountInPaise,
-        items_count: cartItems.length
+        items_count: cartItems.length,
       });
 
       const response = await fetch(`${API_BASE_URL}/razorpay/create-order`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(orderData),
       });
 
       if (!response.ok) {
-        const errorData = await response.json() as { error: string };
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        const errorData = (await response.json()) as { error: string };
+        throw new Error(
+          errorData.error || `HTTP error! status: ${response.status}`
+        );
       }
 
-      const order = await response.json() as RazorpayOrder;
-      console.log('✅ Razorpay order created:', order.id);
+      const order = (await response.json()) as RazorpayOrder;
+      console.log("✅ Razorpay order created:", order.id);
       return order;
     } catch (error) {
-      console.error('❌ Failed to create Razorpay order:', error);
-      throw new Error(`Failed to create order: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("❌ Failed to create Razorpay order:", error);
+      throw new Error(
+        `Failed to create order: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   },
 
@@ -231,128 +250,164 @@ const razorpayService = {
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       if (!window.Razorpay) {
-        const error = new Error('Razorpay SDK not loaded. Please refresh the page and try again.');
-        console.error('❌ Razorpay SDK not found');
+        const error = new Error(
+          "Razorpay SDK not loaded. Please refresh the page and try again."
+        );
+        console.error("❌ Razorpay SDK not found");
         onError?.(error);
         reject(error);
         return;
       }
 
-      
       const options: RazorpayOptions = {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID,
         amount: order.amount,
         currency: order.currency,
-        name: 'Devanagari Web',
-        description: 'Purchase from Devanagari Web Store',
-        image: '/logo.png',
+        name: "Devanagari Web",
+        description: "Purchase from Devanagari Web Store",
+        image: "/logo.png",
         order_id: order.id,
         handler: (response: RazorpayPaymentResponse) => {
-          console.log('✅ Payment successful:', response.razorpay_payment_id);
+          console.log("✅ Payment successful:", response.razorpay_payment_id);
           onSuccess?.(response);
           resolve();
         },
         prefill: {
           name: userName,
           email: userEmail,
-          contact: userPhone || ''
+          contact: userPhone || "",
         },
         notes: {
-          address: 'Devanagari Web Store'
+          address: "Devanagari Web Store",
+          country: "IN",
         },
         theme: {
-          color: '#3B82F6'
+          color: "#3B82F6",
         },
         modal: {
           ondismiss: () => {
-            const error = new Error('Payment cancelled by user');
-            console.log('❌ Payment cancelled');
+            const error = new Error("Payment cancelled by user");
+            console.log("❌ Payment cancelled");
             onError?.(error);
             reject(error);
-          }
+          },
         },
         retry: {
           enabled: true,
-          max_count: 3
+          max_count: 3,
         },
         timeout: 300,
-        remember_customer: true
+        remember_customer: true,
+        method: {
+          netbanking: true,
+          wallet: true,
+          upi: true,
+          emi: true,
+          card: true,
+        },
       };
 
       const razorpayInstance = new window.Razorpay(options);
-      
-      razorpayInstance.on('payment.failed', (response: RazorpayFailureResponse) => {
-        const error = new Error(`Payment failed: ${response.error.description}`);
-        console.error('❌ Payment failed:', response.error);
-        onError?.(error);
-        reject(error);
-      });
+
+      razorpayInstance.on(
+        "payment.failed",
+        (response: RazorpayFailureResponse) => {
+          const error = new Error(
+            `Payment failed: ${response.error.description}`
+          );
+          console.error("❌ Payment failed:", response.error);
+          onError?.(error);
+          reject(error);
+        }
+      );
 
       razorpayInstance.open();
     });
   },
 
-  async verifyPayment(paymentData: RazorpayPaymentResponse): Promise<PaymentVerificationResponse> {
+  async verifyPayment(
+    paymentData: RazorpayPaymentResponse
+  ): Promise<PaymentVerificationResponse> {
     try {
-      console.log('🔐 Verifying payment:', paymentData.razorpay_payment_id);
+      console.log("🔐 Verifying payment:", paymentData.razorpay_payment_id);
 
       const response = await fetch(`${API_BASE_URL}/razorpay/verify-payment`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(paymentData),
       });
 
       if (!response.ok) {
-        const errorData = await response.json() as { error: string };
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        const errorData = (await response.json()) as { error: string };
+        throw new Error(
+          errorData.error || `HTTP error! status: ${response.status}`
+        );
       }
 
-      const result = await response.json() as PaymentVerificationResponse;
-      
+      const result = (await response.json()) as PaymentVerificationResponse;
+
       if (result.isValid) {
-        console.log('✅ Payment verified successfully');
+        console.log("✅ Payment verified successfully");
       } else {
-        console.log('❌ Payment verification failed');
+        console.log("❌ Payment verification failed");
       }
 
       return result;
     } catch (error) {
-      console.error('❌ Failed to verify payment:', error);
-      throw new Error(`Payment verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("❌ Failed to verify payment:", error);
+      throw new Error(
+        `Payment verification failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   },
 
   async getPaymentDetails(paymentId: string): Promise<PaymentDetails> {
     try {
-      const response = await fetch(`${API_BASE_URL}/razorpay/payment/${paymentId}`);
-      
+      const response = await fetch(
+        `${API_BASE_URL}/razorpay/payment/${paymentId}`
+      );
+
       if (!response.ok) {
-        const errorData = await response.json() as { error: string };
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        const errorData = (await response.json()) as { error: string };
+        throw new Error(
+          errorData.error || `HTTP error! status: ${response.status}`
+        );
       }
 
-      return await response.json() as PaymentDetails;
+      return (await response.json()) as PaymentDetails;
     } catch (error) {
-      console.error('❌ Failed to get payment details:', error);
-      throw new Error(`Failed to get payment details: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("❌ Failed to get payment details:", error);
+      throw new Error(
+        `Failed to get payment details: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   },
 
   async getOrderDetails(orderId: string): Promise<RazorpayOrder> {
     try {
       const response = await fetch(`${API_BASE_URL}/razorpay/order/${orderId}`);
-      
+
       if (!response.ok) {
-        const errorData = await response.json() as { error: string };
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        const errorData = (await response.json()) as { error: string };
+        throw new Error(
+          errorData.error || `HTTP error! status: ${response.status}`
+        );
       }
 
-      return await response.json() as RazorpayOrder;
+      return (await response.json()) as RazorpayOrder;
     } catch (error) {
-      console.error('❌ Failed to get order details:', error);
-      throw new Error(`Failed to get order details: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("❌ Failed to get order details:", error);
+      throw new Error(
+        `Failed to get order details: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   },
 
@@ -361,21 +416,110 @@ const razorpayService = {
     return Math.round(usdAmount * conversionRate);
   },
 
-  formatAmount(amountInPaise: number, currency: string = 'INR'): string {
+  formatAmount(amountInPaise: number, currency: string = "INR"): string {
     const amount = amountInPaise / 100;
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
       currency: currency,
-      minimumFractionDigits: 2
+      minimumFractionDigits: 2,
     }).format(amount);
   },
 
-  convertUSDToINRDisplay(amountInUSD: number): { inr: number; formatted: string } {
+  convertUSDToINRDisplay(amountInUSD: number): {
+    inr: number;
+    formatted: string;
+  } {
     const usdToInrRate = 83;
     const inr = Math.round(amountInUSD * usdToInrRate);
     const formatted = this.formatAmount(inr * 100);
     return { inr, formatted };
-  }
+  },
+
+  async processRefund(
+    paymentId: string,
+    amount?: number,
+    reason?: string,
+    speed: "normal" | "optimum" = "normal"
+  ): Promise<RefundResponse> {
+    try {
+      console.log("💸 Processing refund:", {
+        paymentId,
+        amount,
+        reason,
+        speed,
+      });
+
+      const refundData: any = {
+        payment_id: paymentId,
+        speed,
+        notes: {
+          refund_reason: reason || "Customer request",
+          created_at: new Date().toISOString(),
+          processed_from: "devanagari_web",
+        },
+      };
+
+      if (amount) {
+        // Convert USD to paise if amount is provided
+        const usdToInrRate = 83;
+        const amountInINR = Math.round(amount * usdToInrRate);
+        refundData.amount = amountInINR * 100; // Convert to paise
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/razorpay/payment/${paymentId}/refund`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(refundData),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = (await response.json()) as { error: string };
+        throw new Error(
+          errorData.error || `HTTP error! status: ${response.status}`
+        );
+      }
+
+      const refund = (await response.json()) as RefundResponse;
+      console.log("✅ Refund processed successfully:", refund.id);
+      return refund;
+    } catch (error) {
+      console.error("❌ Failed to process refund:", error);
+      throw new Error(
+        `Refund processing failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+  },
+
+  async getRefundDetails(refundId: string): Promise<RefundResponse> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/razorpay/refund/${refundId}`
+      );
+
+      if (!response.ok) {
+        const errorData = (await response.json()) as { error: string };
+        throw new Error(
+          errorData.error || `HTTP error! status: ${response.status}`
+        );
+      }
+
+      return (await response.json()) as RefundResponse;
+    } catch (error) {
+      console.error("❌ Failed to get refund details:", error);
+      throw new Error(
+        `Failed to get refund details: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+  },
 };
 
 export default razorpayService;

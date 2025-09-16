@@ -1,21 +1,24 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { ordersService, Order, OrderItem } from '../services/supabase';
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { ordersService, Order, OrderItem } from "../services/supabase";
 
 const Profile = () => {
   const { user } = useAuth();
-  const [orders, setOrders] = useState<(Order & { order_items: OrderItem[] })[]>([]);
+  const [orders, setOrders] = useState<
+    (Order & { order_items: OrderItem[] })[]
+  >([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchOrders = async () => {
       if (!user) return;
-      
+
       try {
         const userOrders = await ordersService.getUserOrders(user.id);
         setOrders(userOrders);
       } catch (error) {
-        console.error('Error fetching orders:', error);
+        console.error("Error fetching orders:", error);
       } finally {
         setLoading(false);
       }
@@ -37,47 +40,85 @@ const Profile = () => {
   return (
     <div className="bg-[#FDFBF8] pt-16 min-h-screen">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="flex items-center space-x-4 mb-8">
-          {user.user_metadata?.avatar_url ? (
-            <img 
-              src={user.user_metadata.avatar_url} 
-              alt={user.user_metadata.full_name || 'User'} 
-              className="h-16 w-16 rounded-full border-2 border-[#4A5C3D] shadow-lg" 
-            />
-          ) : (
-            <div className="h-16 w-16 rounded-full bg-gray-200 border-2 border-[#4A5C3D] flex items-center justify-center">
-              <span className="text-2xl font-bold text-[#4A5C3D]">
-                {(user.user_metadata?.full_name || user.email || 'U').charAt(0).toUpperCase()}
-              </span>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center space-x-4">
+            {user.user_metadata?.avatar_url ? (
+              <img
+                src={user.user_metadata.avatar_url}
+                alt={user.user_metadata.full_name || "User"}
+                className="h-16 w-16 rounded-full border-2 border-[#4A5C3D] shadow-lg"
+              />
+            ) : (
+              <div className="h-16 w-16 rounded-full bg-gray-200 border-2 border-[#4A5C3D] flex items-center justify-center">
+                <span className="text-2xl font-bold text-[#4A5C3D]">
+                  {(user.user_metadata?.full_name || user.email || "U")
+                    .charAt(0)
+                    .toUpperCase()}
+                </span>
+              </div>
+            )}
+            <div>
+              <div className="text-3xl font-bold text-[#4A5C3D]">
+                {user.user_metadata?.full_name || "User"}
+              </div>
+              <div className="text-lg text-gray-600">{user.email}</div>
             </div>
-          )}
-          <div>
-            <div className="text-3xl font-bold text-[#4A5C3D]">{user.user_metadata?.full_name || 'User'}</div>
-            <div className="text-lg text-gray-600">{user.email}</div>
           </div>
+          <Link
+            to="/settings"
+            className="bg-[#4A5C3D] text-white px-4 py-2 rounded-lg hover:bg-[#3a4a2f] transition-colors flex items-center space-x-2"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+            <span>Settings</span>
+          </Link>
         </div>
 
         {/* Profile Information Card */}
         <div className="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
-          <h2 className="text-xl font-semibold text-[#4A5C3D] mb-4">Profile Information</h2>
+          <h2 className="text-xl font-semibold text-[#4A5C3D] mb-4">
+            Profile Information
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Full Name
+              </label>
               <div className="text-lg text-[#4A5C3D] font-medium">
-                {user.user_metadata?.full_name || 'Not provided'}
+                {user.user_metadata?.full_name || "Not provided"}
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email Address
+              </label>
               <div className="text-lg text-[#4A5C3D] font-medium">
-                {user.email || 'Not provided'}
+                {user.email || "Not provided"}
               </div>
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-gray-200">
             <p className="text-sm text-gray-500">
-              <span className="font-medium">Note:</span> Your profile information is automatically synced from your account. 
-              To update your name or photo, please change it in your account settings.
+              <span className="font-medium">Note:</span> Your profile
+              information is automatically synced from your account. To update
+              your name or photo, please change it in your account settings.
             </p>
           </div>
         </div>
@@ -85,8 +126,10 @@ const Profile = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Order History */}
           <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
-            <h2 className="text-xl font-semibold text-[#4A5C3D] mb-4">Order History</h2>
-            
+            <h2 className="text-xl font-semibold text-[#4A5C3D] mb-4">
+              Order History
+            </h2>
+
             {loading ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#4A5C3D] mx-auto mb-4"></div>
@@ -105,10 +148,15 @@ const Profile = () => {
             ) : (
               <div className="space-y-4">
                 {orders.map((order) => (
-                  <div key={order.id} className="border border-gray-200 rounded-lg p-4 hover:border-[#4A5C3D] transition-colors">
+                  <div
+                    key={order.id}
+                    className="border border-gray-200 rounded-lg p-4 hover:border-[#4A5C3D] transition-colors"
+                  >
                     <div className="flex justify-between items-start mb-3">
                       <div>
-                        <h3 className="font-semibold text-[#4A5C3D]">Order #{order.id.slice(0, 8)}</h3>
+                        <h3 className="font-semibold text-[#4A5C3D]">
+                          Order #{order.id.slice(0, 8)}
+                        </h3>
                         <p className="text-sm text-gray-600">
                           {new Date(order.created_at).toLocaleDateString()}
                         </p>
@@ -119,35 +167,57 @@ const Profile = () => {
                         )}
                       </div>
                       <div className="text-right">
-                        <div className="font-semibold text-[#4A5C3D]">${order.total.toFixed(2)}</div>
+                        <div className="font-semibold text-[#4A5C3D]">
+                          ${order.total.toFixed(2)}
+                        </div>
                         <div className="flex space-x-1 mt-1">
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                            order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
-                            order.status === 'shipped' ? 'bg-purple-100 text-purple-800' :
-                            order.status === 'delivered' ? 'bg-green-100 text-green-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                          <span
+                            className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                              order.status === "pending"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : order.status === "processing"
+                                ? "bg-blue-100 text-blue-800"
+                                : order.status === "shipped"
+                                ? "bg-purple-100 text-purple-800"
+                                : order.status === "delivered"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {order.status.charAt(0).toUpperCase() +
+                              order.status.slice(1)}
                           </span>
                           {order.payment_status && (
-                            <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                              order.payment_status === 'paid' ? 'bg-green-100 text-green-800' :
-                              order.payment_status === 'failed' ? 'bg-red-100 text-red-800' :
-                              'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {order.payment_status.charAt(0).toUpperCase() + order.payment_status.slice(1)}
+                            <span
+                              className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                                order.payment_status === "paid"
+                                  ? "bg-green-100 text-green-800"
+                                  : order.payment_status === "failed"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-yellow-100 text-yellow-800"
+                              }`}
+                            >
+                              {order.payment_status.charAt(0).toUpperCase() +
+                                order.payment_status.slice(1)}
                             </span>
                           )}
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-2 mb-3">
                       {order.order_items.map((item) => (
-                        <div key={item.id} className="flex justify-between text-sm">
-                          <span>{item.product?.name || 'Product'} × {item.quantity}</span>
-                          <span>${item.price.toFixed(2)}</span>
+                        <div
+                          key={item.id}
+                          className="flex justify-between text-sm"
+                        >
+                          <span>
+                            {item.product_name ||
+                              item.product?.name ||
+                              "Product"}{" "}
+                            × {item.quantity}
+                          </span>
+                          <span>${item.product_price.toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
@@ -161,12 +231,12 @@ const Profile = () => {
                           <span>Currency: {order.currency}</span>
                         )}
                       </div>
-                      <a
-                        href={`/order/${order.id}`}
+                      <Link
+                        to={`/order/${order.id}`}
                         className="text-sm text-[#4A5C3D] hover:text-[#3a4a2f] font-medium"
                       >
                         View Details →
-                      </a>
+                      </Link>
                     </div>
                   </div>
                 ))}
@@ -176,11 +246,16 @@ const Profile = () => {
 
           {/* Address Management */}
           <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
-            <h2 className="text-xl font-semibold text-[#4A5C3D] mb-4">Address Management</h2>
+            <h2 className="text-xl font-semibold text-[#4A5C3D] mb-4">
+              Address Management
+            </h2>
             <div className="text-center py-8">
-              <p className="text-gray-600 mb-4">Address management coming soon!</p>
+              <p className="text-gray-600 mb-4">
+                Address management coming soon!
+              </p>
               <p className="text-sm text-gray-500">
-                This feature will allow you to save and manage multiple shipping addresses.
+                This feature will allow you to save and manage multiple shipping
+                addresses.
               </p>
             </div>
           </div>

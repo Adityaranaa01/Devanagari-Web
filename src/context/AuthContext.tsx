@@ -1,7 +1,13 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import { userService } from '../services/supabase';
-import type { User, AuthError } from '@supabase/supabase-js';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { supabase } from "../lib/supabaseClient";
+import { userService } from "../services/supabase";
+import type { User, AuthError } from "@supabase/supabase-js";
 
 type AuthUser = {
   id: string;
@@ -31,15 +37,17 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const AUTH_USER_KEY = 'authUser';
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const AUTH_USER_KEY = "authUser";
 
   const readCachedUser = (): AuthUser | null => {
     try {
       const raw = localStorage.getItem(AUTH_USER_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.id && typeof parsed.id === 'string') {
+      if (parsed && parsed.id && typeof parsed.id === "string") {
         return {
           id: parsed.id,
           email: parsed.email ?? null,
@@ -48,7 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return null;
     } catch (error) {
-      console.warn('Error reading cached user:', error);
+      console.warn("Error reading cached user:", error);
       return null;
     }
   };
@@ -61,7 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(authUser));
     } catch (error) {
-      console.warn('Error caching user:', error);
+      console.warn("Error caching user:", error);
     }
   };
 
@@ -69,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       localStorage.removeItem(AUTH_USER_KEY);
     } catch (error) {
-      console.warn('Error clearing cached user:', error);
+      console.warn("Error clearing cached user:", error);
     }
   };
 
@@ -77,14 +85,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await userService.ensureUserExists({
         id: supabaseUser.id,
-        email: supabaseUser.email || '',
-        name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || null,
-        avatar_url: supabaseUser.user_metadata?.avatar_url || null
+        email: supabaseUser.email || "",
+        name:
+          supabaseUser.user_metadata?.full_name ||
+          supabaseUser.user_metadata?.name ||
+          null,
+        avatar_url: supabaseUser.user_metadata?.avatar_url || null,
       });
-      console.log('✅ User ensured in database');
     } catch (error) {
-      console.error('❌ Error ensuring user exists in database:', error);
-      console.log('⚠️ User creation failed, but auth flow continues. User will be created when needed.');
+      console.error("❌ Error ensuring user exists in database:", error);
+      console.log(
+        "⚠️ User creation failed, but auth flow continues. User will be created when needed."
+      );
     }
   };
 
@@ -98,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         phone: supabaseUser.user_metadata?.phone,
         phone_number: supabaseUser.user_metadata?.phone_number,
         name: supabaseUser.user_metadata?.name,
-        ...supabaseUser.user_metadata
+        ...supabaseUser.user_metadata,
       },
     };
   };
@@ -109,12 +121,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Get initial session
     const getInitialSession = async (): Promise<void> => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
         if (!isMounted) return;
 
         if (error) {
-          console.error('Error getting initial session:', error);
+          console.error("Error getting initial session:", error);
           setLoading(false);
           return;
         }
@@ -123,12 +138,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const authUser = createAuthUser(session.user);
           setUser(authUser);
           cacheUser(authUser);
-          
+
           // Ensure user exists in database (non-blocking)
           ensureUserInDatabase(session.user).catch(console.error);
         }
       } catch (error) {
-        console.error('Error in getInitialSession:', error);
+        console.error("Error in getInitialSession:", error);
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -139,25 +154,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getInitialSession();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[AuthContext] Auth state changed:', event, session?.user?.email);
-      
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(
+        "[AuthContext] Auth state changed:",
+        event,
+        session?.user?.email,
+        "Session exists:",
+        !!session
+      );
+
       if (!isMounted) return;
 
       try {
-        if (session?.user) {
+        if (event === "SIGNED_IN" && session?.user) {
           const authUser = createAuthUser(session.user);
           setUser(authUser);
           cacheUser(authUser);
-          
+
           // Ensure user exists in database (non-blocking)
           ensureUserInDatabase(session.user).catch(console.error);
-        } else {
+        } else if (event === "SIGNED_OUT" || !session) {
           setUser(null);
           clearCachedUser();
+        } else if (session?.user) {
+          const authUser = createAuthUser(session.user);
+          setUser(authUser);
+          cacheUser(authUser);
         }
       } catch (error) {
-        console.error('Error in auth state change handler:', error);
+        console.error("Error in auth state change handler:", error);
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -171,7 +198,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const signup = async (email: string, password: string): Promise<AuthResponse> => {
+  const signup = async (
+    email: string,
+    password: string
+  ): Promise<AuthResponse> => {
     try {
       const { error } = await supabase.auth.signUp({
         email,
@@ -179,12 +209,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       return { error };
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error("Signup error:", error);
       return { error: error as AuthError };
     }
   };
 
-  const login = async (email: string, password: string): Promise<AuthResponse> => {
+  const login = async (
+    email: string,
+    password: string
+  ): Promise<AuthResponse> => {
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email,
@@ -192,7 +225,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       return { error };
     } catch (error) {
-      console.error('Login error:', error);
+      console.error("Login error:", error);
       return { error: error as AuthError };
     }
   };
@@ -200,14 +233,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithGoogle = async (): Promise<AuthResponse> => {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/`,
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
         },
       });
       return { error };
     } catch (error) {
-      console.error('Google login error:', error);
+      console.error("Google login error:", error);
       return { error: error as AuthError };
     }
   };
@@ -216,33 +253,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error('Logout error:', error);
+        console.error("Logout error:", error);
       }
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     }
   };
 
-  const value = useMemo(() => ({ 
-    user, 
-    loading, 
-    signup, 
-    login, 
-    loginWithGoogle, 
-    logout 
-  }), [user, loading]);
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      loading,
+      signup,
+      login,
+      loginWithGoogle,
+      logout,
+    }),
+    [user, loading]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = (): AuthContextValue => {
   const ctx = useContext(AuthContext);
   if (!ctx) {
-    throw new Error('useAuth must be used within AuthProvider');
+    throw new Error("useAuth must be used within AuthProvider");
   }
   return ctx;
 };
