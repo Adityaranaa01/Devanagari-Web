@@ -18,6 +18,7 @@ import OrderDetails from "./pages/OrderDetails";
 import Dashboard from "./pages/admin/Dashboard";
 import Products from "./pages/admin/Products";
 import Orders from "./pages/admin/Orders";
+import PromoCodes from "./pages/admin/PromoCodes";
 import Refunds from "./pages/admin/Refunds";
 import Users from "./pages/admin/Users";
 import Analytics from "./pages/admin/Analytics";
@@ -221,6 +222,16 @@ function App() {
                       <AdminRoute>
                         <AdminLayout>
                           <Orders />
+                        </AdminLayout>
+                      </AdminRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/promo-codes"
+                    element={
+                      <AdminRoute>
+                        <AdminLayout>
+                          <PromoCodes />
                         </AdminLayout>
                       </AdminRoute>
                     }

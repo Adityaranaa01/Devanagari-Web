@@ -13,6 +13,7 @@ import {
   Shield,
   RefreshCw,
   Home,
+  Tag,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useAdmin } from "../context/AdminContext";
@@ -31,6 +32,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
     { name: "Products", href: "/admin/products", icon: Package },
     { name: "Orders", href: "/admin/orders", icon: ShoppingCart },
+    { name: "Promo Codes", href: "/admin/promo-codes", icon: Tag },
     { name: "Refunds", href: "/admin/refunds", icon: RefreshCw },
     { name: "Users", href: "/admin/users", icon: Users },
     { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },

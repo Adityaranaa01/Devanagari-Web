@@ -7,11 +7,13 @@ import {
   CreditCard,
   Check,
   ArrowRight,
+  Plus,
 } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { addressService, UserAddress } from "../services/supabase";
+import { supabase } from "../lib/supabaseClient";
 import razorpayService from "../services/razorpay";
 
 interface CheckoutModalProps {
@@ -23,6 +25,18 @@ interface RazorpayPaymentResponse {
   razorpay_payment_id: string;
   razorpay_order_id: string;
   razorpay_signature: string;
+}
+
+interface AddressFormData {
+  name: string;
+  phone: string;
+  address_line_1: string;
+  address_line_2: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+  is_default: boolean;
 }
 
 const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose }) => {
@@ -43,7 +57,25 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [showOffersModal, setShowOffersModal] = useState(false);
+  const [availableOffers, setAvailableOffers] = useState<any[]>([]);
   const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<UserAddress | null>(
+    null
+  );
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [addressToDelete, setAddressToDelete] = useState<string | null>(null);
+  const [addressFormData, setAddressFormData] = useState<AddressFormData>({
+    name: "",
+    phone: "",
+    address_line_1: "",
+    address_line_2: "",
+    city: "",
+    state: "",
+    postal_code: "",
+    country: "India",
+    is_default: false,
+  });
 
   // Free delivery pincodes
   const freeDeliveryPincodes = [
@@ -62,52 +94,50 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose }) => {
     selectedAddress &&
     freeDeliveryPincodes.includes(selectedAddress.postal_code);
   const shipping = isFreeDelivery ? 0 : 99;
-  const discount = promoApplied ? Math.round(subtotal * 0.1) : 0;
+  const discount = promoApplied ? promoDiscount : 0;
   const total = subtotal + shipping - discount;
 
-  // Calculate offers based on current subtotal
-  const offers = useMemo(
-    () => [
-      {
-        code: "WELCOME10",
-        discount: 10,
-        type: "percentage",
-        description: "10% off on your first order",
-        minOrder: 0,
-        applicable: true,
-      },
-      {
-        code: "SAVE20",
-        discount: 20,
-        type: "percentage",
-        description: "20% off on orders above ₹500",
-        minOrder: 500,
-        applicable: subtotal >= 500,
-      },
-      {
-        code: "FREESHIP",
-        discount: 0,
-        type: "shipping",
-        description: "Free shipping on orders above ₹300",
-        minOrder: 300,
-        applicable: subtotal >= 300,
-      },
-      {
-        code: "NEWUSER",
-        discount: 15,
-        type: "percentage",
-        description: "15% off for new users",
-        minOrder: 0,
-        applicable: true,
-      },
-    ],
-    [subtotal]
-  );
+  // Fetch available offers from database
+  const fetchOffers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("promo_codes")
+        .select("*")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false });
 
-  // Load addresses when modal opens
+      if (error) throw error;
+
+      const offers = (data || []).map((promo) => ({
+        code: promo.code,
+        discount: promo.discount_value,
+        type: promo.discount_type,
+        description: promo.description,
+        minOrder: promo.min_order_amount,
+        applicable: subtotal >= promo.min_order_amount,
+      }));
+
+      setAvailableOffers(offers);
+    } catch (error) {
+      console.error("Error fetching offers:", error);
+      // Fallback to empty array if fetch fails
+      setAvailableOffers([]);
+    }
+  };
+
+  // Calculate offers based on current subtotal
+  const offers = useMemo(() => {
+    return availableOffers.map((offer) => ({
+      ...offer,
+      applicable: subtotal >= offer.minOrder,
+    }));
+  }, [availableOffers, subtotal]);
+
+  // Load addresses and offers when modal opens
   useEffect(() => {
     if (isOpen && user) {
       fetchAddresses();
+      fetchOffers();
     }
   }, [isOpen, user]);
 
@@ -146,7 +176,10 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose }) => {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ code: promoCode }),
+          body: JSON.stringify({
+            code: promoCode,
+            orderAmount: subtotal,
+          }),
         }
       );
 
@@ -154,7 +187,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose }) => {
 
       if (data.valid) {
         setPromoApplied(true);
-        setPromoDiscount(Math.round(subtotal * (data.discount / 100)));
+        // Use the discount amount calculated by the server
+        setPromoDiscount(data.discountAmount || 0);
         showSuccess("Promo Applied", `${data.description}`);
       } else {
         showError(
@@ -246,6 +280,85 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose }) => {
     } finally {
       setPaymentLoading(false);
     }
+  };
+
+  const handleAddressSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    try {
+      if (editingAddress) {
+        await addressService.updateAddress(editingAddress.id, addressFormData);
+        showSuccess("Address Updated", "Address updated successfully!");
+      } else {
+        await addressService.createAddress(user.id, addressFormData);
+        showSuccess("Address Added", "Address added successfully!");
+      }
+      await fetchAddresses();
+      resetAddressForm();
+    } catch (error) {
+      console.error("Error saving address:", error);
+      showError("Save Failed", "Failed to save address. Please try again.");
+    }
+  };
+
+  const handleEditAddress = (address: UserAddress) => {
+    setEditingAddress(address);
+    setAddressFormData({
+      name: address.name,
+      phone: address.phone,
+      address_line_1: address.address_line_1,
+      address_line_2: address.address_line_2 || "",
+      city: address.city,
+      state: address.state,
+      postal_code: address.postal_code,
+      country: address.country,
+      is_default: address.is_default,
+    });
+    setShowAddressForm(true);
+  };
+
+  const handleDeleteAddress = (addressId: string) => {
+    setAddressToDelete(addressId);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteAddress = async () => {
+    if (!addressToDelete) return;
+
+    try {
+      await addressService.deleteAddress(addressToDelete);
+      await fetchAddresses();
+
+      // If the deleted address was selected, clear selection
+      if (selectedAddress?.id === addressToDelete) {
+        setSelectedAddress(null);
+      }
+
+      showSuccess("Address Deleted", "Address deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting address:", error);
+      showError("Delete Failed", "Failed to delete address. Please try again.");
+    } finally {
+      setShowDeleteModal(false);
+      setAddressToDelete(null);
+    }
+  };
+
+  const resetAddressForm = () => {
+    setAddressFormData({
+      name: "",
+      phone: "",
+      address_line_1: "",
+      address_line_2: "",
+      city: "",
+      state: "",
+      postal_code: "",
+      country: "India",
+      is_default: false,
+    });
+    setEditingAddress(null);
+    setShowAddressForm(false);
   };
 
   if (!isOpen) return null;
@@ -453,7 +566,10 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose }) => {
                 <h3 className="text-lg font-semibold text-[#4A5C3D]">
                   Shipping Address
                 </h3>
-                <button className="text-[#4A5C3D] text-sm font-medium">
+                <button
+                  onClick={() => setShowAddressForm(true)}
+                  className="text-[#4A5C3D] text-sm font-medium"
+                >
                   + Add address
                 </button>
               </div>
@@ -467,7 +583,10 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose }) => {
                 <div className="text-center py-8 bg-gray-50 rounded-lg">
                   <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600 mb-4">No addresses found</p>
-                  <button className="text-[#4A5C3D] text-sm font-medium">
+                  <button
+                    onClick={() => setShowAddressForm(true)}
+                    className="text-[#4A5C3D] text-sm font-medium"
+                  >
                     Add your first address
                   </button>
                 </div>
@@ -515,10 +634,16 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose }) => {
                           </div>
                         </div>
                         <div className="flex space-x-2">
-                          <button className="text-[#4A5C3D] text-sm font-medium">
+                          <button
+                            onClick={() => handleEditAddress(address)}
+                            className="text-[#4A5C3D] text-sm font-medium hover:underline"
+                          >
                             Edit
                           </button>
-                          <button className="text-red-500 text-sm font-medium">
+                          <button
+                            onClick={() => handleDeleteAddress(address.id)}
+                            className="text-red-500 text-sm font-medium hover:underline"
+                          >
                             Delete
                           </button>
                         </div>
@@ -834,6 +959,260 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose }) => {
                   className="w-full bg-[#4A5C3D] text-white py-3 rounded-lg font-semibold hover:bg-[#3a4a2f] transition-colors"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Address Form Modal */}
+      {showAddressForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-60">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-[#4A5C3D]">
+                  {editingAddress ? "Edit Address" : "Add New Address"}
+                </h3>
+                <button
+                  onClick={resetAddressForm}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddressSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={addressFormData.name}
+                    onChange={(e) =>
+                      setAddressFormData({
+                        ...addressFormData,
+                        name: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A5C3D] focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Phone Number *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={addressFormData.phone}
+                    onChange={(e) =>
+                      setAddressFormData({
+                        ...addressFormData,
+                        phone: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A5C3D] focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Address Line 1 *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={addressFormData.address_line_1}
+                    onChange={(e) =>
+                      setAddressFormData({
+                        ...addressFormData,
+                        address_line_1: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A5C3D] focus:border-transparent"
+                    placeholder="Street address, P.O. box, etc."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Address Line 2
+                  </label>
+                  <input
+                    type="text"
+                    value={addressFormData.address_line_2}
+                    onChange={(e) =>
+                      setAddressFormData({
+                        ...addressFormData,
+                        address_line_2: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A5C3D] focus:border-transparent"
+                    placeholder="Apartment, suite, unit, building, floor, etc."
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      City *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={addressFormData.city}
+                      onChange={(e) =>
+                        setAddressFormData({
+                          ...addressFormData,
+                          city: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A5C3D] focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      State *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={addressFormData.state}
+                      onChange={(e) =>
+                        setAddressFormData({
+                          ...addressFormData,
+                          state: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A5C3D] focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Postal Code *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={addressFormData.postal_code}
+                      onChange={(e) =>
+                        setAddressFormData({
+                          ...addressFormData,
+                          postal_code: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A5C3D] focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Country *
+                    </label>
+                    <select
+                      required
+                      value={addressFormData.country}
+                      onChange={(e) =>
+                        setAddressFormData({
+                          ...addressFormData,
+                          country: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A5C3D] focus:border-transparent"
+                    >
+                      <option value="India">India</option>
+                      <option value="United States">United States</option>
+                      <option value="United Kingdom">United Kingdom</option>
+                      <option value="Canada">Canada</option>
+                      <option value="Australia">Australia</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="is_default"
+                    checked={addressFormData.is_default}
+                    onChange={(e) =>
+                      setAddressFormData({
+                        ...addressFormData,
+                        is_default: e.target.checked,
+                      })
+                    }
+                    className="h-4 w-4 text-[#4A5C3D] focus:ring-[#4A5C3D] border-gray-300 rounded"
+                  />
+                  <label
+                    htmlFor="is_default"
+                    className="ml-2 text-sm text-gray-700"
+                  >
+                    Set as default address
+                  </label>
+                </div>
+
+                <div className="flex gap-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={resetAddressForm}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-[#4A5C3D] text-white rounded-lg hover:bg-[#3a4a2f] transition-colors flex items-center justify-center gap-x-2"
+                  >
+                    <Check className="h-4 w-4" />
+                    {editingAddress ? "Update Address" : "Add Address"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-70">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-red-600">
+                  Delete Address
+                </h3>
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete this address? This action cannot
+                be undone.
+              </p>
+
+              <div className="flex gap-x-3">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteAddress}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Delete
                 </button>
               </div>
             </div>

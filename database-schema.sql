@@ -144,6 +144,25 @@
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
 
+    -- Promo codes table - store promotional codes and discounts
+    CREATE TABLE public.promo_codes (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        code TEXT NOT NULL UNIQUE,
+        description TEXT NOT NULL,
+        discount_type TEXT NOT NULL CHECK (discount_type IN ('percentage', 'fixed', 'shipping')),
+        discount_value DECIMAL(10,2) NOT NULL CHECK (discount_value >= 0),
+        min_order_amount DECIMAL(10,2) DEFAULT 0 CHECK (min_order_amount >= 0),
+        max_discount_amount DECIMAL(10,2) CHECK (max_discount_amount >= 0),
+        usage_limit INTEGER, -- NULL means unlimited
+        used_count INTEGER DEFAULT 0 CHECK (used_count >= 0),
+        is_active BOOLEAN DEFAULT TRUE,
+        valid_from TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        valid_until TIMESTAMP WITH TIME ZONE,
+        created_by UUID REFERENCES auth.users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
     -- Admin actions table - audit log for admin activities
     CREATE TABLE public.admin_actions (
         id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -200,6 +219,13 @@
     CREATE INDEX idx_order_items_order_id ON public.order_items(order_id);
     CREATE INDEX idx_order_items_product_id ON public.order_items(product_id);
 
+    -- Promo codes indexes
+    CREATE INDEX idx_promo_codes_code ON public.promo_codes(code);
+    CREATE INDEX idx_promo_codes_is_active ON public.promo_codes(is_active);
+    CREATE INDEX idx_promo_codes_valid_from ON public.promo_codes(valid_from);
+    CREATE INDEX idx_promo_codes_valid_until ON public.promo_codes(valid_until);
+    CREATE INDEX idx_promo_codes_discount_type ON public.promo_codes(discount_type);
+
     -- Admin actions indexes
     CREATE INDEX idx_admin_actions_admin_id ON public.admin_actions(admin_id);
     CREATE INDEX idx_admin_actions_resource_type ON public.admin_actions(resource_type);
@@ -215,6 +241,7 @@
     ALTER TABLE public.cart_items ENABLE ROW LEVEL SECURITY;
     ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
     ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.promo_codes ENABLE ROW LEVEL SECURITY;
     ALTER TABLE public.admin_actions ENABLE ROW LEVEL SECURITY;
 
     -- =====================================================
@@ -315,6 +342,13 @@ CREATE POLICY "Admins can manage all orders" ON public.orders
         );
 
     CREATE POLICY "Admins can manage all order items" ON public.order_items
+        FOR ALL USING (public.is_admin_by_role());
+
+    -- Promo codes policies
+    CREATE POLICY "Promo codes are viewable by everyone when active" ON public.promo_codes
+        FOR SELECT USING (is_active = true);
+
+    CREATE POLICY "Admins can manage all promo codes" ON public.promo_codes
         FOR ALL USING (public.is_admin_by_role());
 
     -- Admin actions policies
@@ -523,6 +557,49 @@ CREATE POLICY "Admins can manage all orders" ON public.orders
         100,
         900,
         'health_mix',
+        true
+    );
+
+    -- Insert sample promo codes
+    INSERT INTO public.promo_codes (code, description, discount_type, discount_value, min_order_amount, max_discount_amount, usage_limit, is_active) VALUES
+    (
+        'WELCOME10',
+        '10% off on your first order',
+        'percentage',
+        10.00,
+        0.00,
+        100.00,
+        1000,
+        true
+    ),
+    (
+        'SAVE20',
+        '20% off on orders above ₹500',
+        'percentage',
+        20.00,
+        500.00,
+        200.00,
+        500,
+        true
+    ),
+    (
+        'FREESHIP',
+        'Free shipping on orders above ₹300',
+        'shipping',
+        0.00,
+        300.00,
+        NULL,
+        1000,
+        true
+    ),
+    (
+        'NEWUSER',
+        '15% off for new users',
+        'percentage',
+        15.00,
+        0.00,
+        150.00,
+        2000,
         true
     );
 
