@@ -394,7 +394,7 @@ const Analytics: React.FC = () => {
                   </dt>
                   <dd className="flex items-baseline">
                     <div className="text-2xl font-semibold text-gray-900">
-                      ${analytics.totalRevenue.toFixed(2)} USD
+                      ₹{analytics.totalRevenue.toFixed(2)} INR
                     </div>
                     <div
                       className={`ml-2 flex items-baseline text-sm font-semibold ${getGrowthColor(
@@ -583,7 +583,7 @@ const Analytics: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-sm font-medium text-gray-900">
-                    ${product.total_revenue.toFixed(2)} USD
+                    ₹{product.total_revenue.toFixed(2)} INR
                   </div>
                 </div>
               </div>
@@ -609,7 +609,7 @@ const Analytics: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-sm font-medium text-gray-900">
-                    ${order.total.toFixed(2)} USD
+                    ₹{order.total.toFixed(2)} INR
                   </div>
                 </div>
               </div>

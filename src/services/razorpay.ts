@@ -456,10 +456,8 @@ const razorpayService = {
       };
 
       if (amount) {
-        // Convert USD to paise if amount is provided
-        const usdToInrRate = 83;
-        const amountInINR = Math.round(amount * usdToInrRate);
-        refundData.amount = amountInINR * 100; // Convert to paise
+        // Amount is already in INR from database, just convert to paise
+        refundData.amount = Math.round(amount * 100); // Convert INR to paise
       }
 
       const response = await fetch(
@@ -474,10 +472,18 @@ const razorpayService = {
       );
 
       if (!response.ok) {
-        const errorData = (await response.json()) as { error: string };
-        throw new Error(
-          errorData.error || `HTTP error! status: ${response.status}`
-        );
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = (await response.json()) as {
+            error: string;
+            code?: string;
+          };
+          errorMessage = errorData.error || errorMessage;
+          console.error("❌ Server error response:", errorData);
+        } catch (parseError) {
+          console.error("❌ Failed to parse error response:", parseError);
+        }
+        throw new Error(errorMessage);
       }
 
       const refund = (await response.json()) as RefundResponse;

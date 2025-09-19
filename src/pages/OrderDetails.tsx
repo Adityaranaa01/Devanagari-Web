@@ -135,7 +135,7 @@ const OrderDetails: React.FC = () => {
       // Update order in database with refund information
       const refundData = {
         refund_id: refund.id,
-        refund_amount: refund.amount / 100, // Convert from paise to INR, then to USD
+        refund_amount: refund.amount / 100, // Convert from paise to INR
         refund_reason: "Order cancelled by customer",
         refund_status: refund.status as "pending" | "processed" | "failed",
         refunded_at: new Date(refund.created_at * 1000).toISOString(),
@@ -150,7 +150,7 @@ const OrderDetails: React.FC = () => {
         "Order Cancelled",
         `Order cancelled successfully!\n\nRefund ID: ${
           refund.id
-        }\nRefund Amount: $${order.total.toFixed(
+        }\nRefund Amount: ₹${order.total.toFixed(
           2
         )}\n\nYour refund will be processed within 5-7 business days.`
       );
@@ -162,6 +162,19 @@ const OrderDetails: React.FC = () => {
     } catch (error) {
       console.error("❌ Error processing cancellation:", error);
 
+      // Extract more specific error information
+      let errorMessage = "Unknown error occurred";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        console.error("❌ Error details:", {
+          message: error.message,
+          stack: error.stack,
+          paymentId: order.payment_id,
+          orderId: order.id,
+          total: order.total,
+        });
+      }
+
       // If refund fails, still cancel the order but without refund
       if (order.payment_status === "paid") {
         await ordersService.cancelOrder(order.id);
@@ -171,7 +184,7 @@ const OrderDetails: React.FC = () => {
 
         showError(
           "Refund Processing Failed",
-          `Order cancelled, but refund processing failed. Please contact support with Order ID: ${order.id}`
+          `Order cancelled, but refund processing failed.\n\nError: ${errorMessage}\n\nPlease contact support with Order ID: ${order.id}`
         );
 
         // Redirect to orders page

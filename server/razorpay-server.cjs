@@ -24,6 +24,15 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    razorpay_configured: !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET)
+  });
+});
+
 // Middleware to validate Razorpay configuration
 const validateRazorpayConfig = (req, res, next) => {
   if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
@@ -367,6 +376,14 @@ app.post('/api/razorpay/payment/:paymentId/refund', validateRazorpayConfig, asyn
     const { paymentId } = req.params;
     const { amount, speed = 'normal', notes = {}, receipt } = req.body;
 
+    console.log('💸 Processing refund request:', {
+      paymentId,
+      amount,
+      speed,
+      notes,
+      receipt
+    });
+
     const refundData = {
       payment_id: paymentId,
       notes: {
@@ -380,9 +397,11 @@ app.post('/api/razorpay/payment/:paymentId/refund', validateRazorpayConfig, asyn
     if (speed) refundData.speed = speed;
     if (receipt) refundData.receipt = receipt;
 
+    console.log('💸 Refund data prepared:', refundData);
+
     const refund = await razorpay.payments.refund(paymentId, refundData);
 
-    console.log('💸 Refund processed:', {
+    console.log('💸 Refund processed successfully:', {
       id: refund.id,
       payment_id: refund.payment_id,
       amount: refund.amount,
@@ -403,16 +422,26 @@ app.post('/api/razorpay/payment/:paymentId/refund', validateRazorpayConfig, asyn
       created_at: refund.created_at
     });
   } catch (error) {
-    console.error('❌ Error processing refund:', error);
+    console.error('❌ Error processing refund:', {
+      message: error.message,
+      statusCode: error.statusCode,
+      error: error.error,
+      paymentId: req.params.paymentId,
+      requestBody: req.body
+    });
 
     if (error.statusCode) {
       return res.status(error.statusCode).json({
         error: error.error?.description || 'Failed to process refund',
-        code: error.error?.code
+        code: error.error?.code,
+        details: error.error
       });
     }
 
-    res.status(500).json({ error: 'Failed to process refund' });
+    res.status(500).json({
+      error: 'Failed to process refund',
+      details: error.message
+    });
   }
 });
 
