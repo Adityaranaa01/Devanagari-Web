@@ -583,6 +583,48 @@ app.use((error, req, res, next) => {
   });
 });
 
+// Validate Promo Code
+app.post('/api/promo/validate', async (req, res) => {
+  try {
+    const { code } = req.body;
+
+    if (!code) {
+      return res.status(400).json({ error: 'Promo code is required' });
+    }
+
+    // Valid promo codes (in a real app, this would be in a database)
+    const validCodes = {
+      'WELCOME10': { discount: 10, type: 'percentage', description: '10% off on your first order' },
+      'SAVE10': { discount: 10, type: 'percentage', description: '10% off on all orders' },
+      'DISCOUNT10': { discount: 10, type: 'percentage', description: '10% off on orders above ₹500' }
+    };
+
+    const promoCode = validCodes[code.toUpperCase()];
+
+    if (!promoCode) {
+      return res.status(400).json({
+        error: 'Invalid promo code',
+        valid: false
+      });
+    }
+
+    res.json({
+      valid: true,
+      code: code.toUpperCase(),
+      discount: promoCode.discount,
+      type: promoCode.type,
+      description: promoCode.description
+    });
+
+  } catch (error) {
+    console.error('❌ Error validating promo code:', error);
+    res.status(500).json({
+      error: 'Failed to validate promo code',
+      valid: false
+    });
+  }
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });

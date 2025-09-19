@@ -8,6 +8,7 @@ import AdminLayout from "./components/AdminLayout";
 import Home from "./pages/Home";
 import Shop from "./pages/Shop";
 import Cart from "./pages/Cart";
+import Checkout from "./pages/Checkout";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Terms from "./pages/Terms";
@@ -101,6 +102,18 @@ function App() {
                         <Navbar />
                         <main className="flex-1">
                           <Cart />
+                        </main>
+                        <Footer />
+                      </>
+                    }
+                  />
+                  <Route
+                    path="/checkout"
+                    element={
+                      <>
+                        <Navbar />
+                        <main className="flex-1">
+                          <Checkout />
                         </main>
                         <Footer />
                       </>

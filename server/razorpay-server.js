@@ -549,6 +549,49 @@ app.use((error, req, res, next) => {
   });
 });
 
+// Validate Promo Code
+app.post('/api/promo/validate', async (req, res) => {
+  try {
+    const { code } = req.body;
+
+    if (!code) {
+      return res.status(400).json({ error: 'Promo code is required' });
+    }
+
+    // Valid promo codes (in a real app, this would be in a database)
+    const validCodes = {
+      'WELCOME10': { discount: 10, type: 'percentage', description: '10% off on your first order' },
+      'SAVE20': { discount: 20, type: 'percentage', description: '20% off on orders above ₹500' },
+      'FREESHIP': { discount: 0, type: 'shipping', description: 'Free shipping on orders above ₹300' },
+      'NEWUSER': { discount: 15, type: 'percentage', description: '15% off for new users' }
+    };
+
+    const promoCode = validCodes[code.toUpperCase()];
+
+    if (!promoCode) {
+      return res.status(400).json({
+        error: 'Invalid promo code',
+        valid: false
+      });
+    }
+
+    res.json({
+      valid: true,
+      code: code.toUpperCase(),
+      discount: promoCode.discount,
+      type: promoCode.type,
+      description: promoCode.description
+    });
+
+  } catch (error) {
+    console.error('❌ Error validating promo code:', error);
+    res.status(500).json({
+      error: 'Failed to validate promo code',
+      valid: false
+    });
+  }
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
@@ -569,6 +612,7 @@ app.listen(PORT, () => {
   console.log(`   GET  /api/razorpay/order/:orderId/payments      - Get order payments`);
   console.log(`   POST /api/razorpay/payment/:paymentId/capture   - Capture payment`);
   console.log(`   POST /api/razorpay/payment/:paymentId/refund    - Refund payment`);
+  console.log(`   POST /api/promo/validate                        - Validate promo code`);
   console.log(`   POST /api/webhooks/razorpay                     - Webhook handler`);
 });
 

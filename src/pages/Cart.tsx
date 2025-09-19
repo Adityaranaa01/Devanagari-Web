@@ -7,6 +7,7 @@ import { useNotification } from "../context/NotificationContext";
 import { ordersService, addressService } from "../services/supabase";
 import RazorpayPayment from "../components/RazorpayPayment";
 import ConfirmationModal from "../components/ConfirmationModal";
+import CheckoutModal from "../components/CheckoutModal";
 
 interface RazorpayPaymentResponse {
   razorpay_payment_id: string;
@@ -32,6 +33,7 @@ const Cart = () => {
   const [userAddresses, setUserAddresses] = useState<any[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const [showAddressConfirmModal, setShowAddressConfirmModal] = useState(false);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
 
   const getSubtotal = (price: number, qty: number) => price * qty;
 
@@ -123,7 +125,7 @@ const Cart = () => {
         Object.keys(razorpayService || {})
       );
 
-      const amount = totalPrice + (totalPrice >= 500 ? 0 : 50); // Free shipping over ₹500, otherwise ₹50
+      const amount = totalPrice; // No shipping charges
 
       console.log("Processing payment:", {
         originalAmount: amount,
@@ -302,7 +304,8 @@ const Cart = () => {
       const order = await ordersService.createOrder(
         user.id,
         cartItems,
-        paymentData
+        paymentData,
+        99 // Default shipping charge
       );
 
       try {
@@ -359,11 +362,8 @@ const Cart = () => {
   };
 
   const handlePaymentInitiation = async () => {
-    // Check addresses before initiating payment
-    const hasAddresses = await checkUserAddresses();
-    if (!hasAddresses) {
-      return; // Address validation failed or user cancelled
-    }
+    // Open checkout modal instead of checking addresses directly
+    setShowCheckoutModal(true);
   };
 
   if (loading) {
@@ -491,7 +491,7 @@ const Cart = () => {
                         {item.product?.name || "Product"}
                       </h3>
                       <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 text-sm text-gray-600">
-                        <span className="bg-[#E6D9C5] px-2 sm:px-3 py-1 rounded-full font-medium text-xs sm:text-sm">
+                        <span className="bg-[#E6D9C5] px-2 sm:px-3 py-1 rounded-full font-medium text-xs sm:text-sm text-center inline-block">
                           {item.product?.weight}g pack
                         </span>
                         <span className="text-base sm:text-lg font-bold text-[#A88B67]">
@@ -651,18 +651,11 @@ const Cart = () => {
                   </span>
                 </div>
 
-                <div className="flex justify-between text-base sm:text-lg">
-                  <span className="text-gray-700">Shipping</span>
-                  <span className="font-semibold text-green-600">
-                    {totalPrice >= 500 ? "Free" : "₹50"}
-                  </span>
-                </div>
-
                 <div className="border-t border-gray-200 pt-3 sm:pt-4">
                   <div className="flex justify-between text-lg sm:text-xl font-bold">
                     <span className="text-[#4A5C3D]">Total</span>
                     <span className="text-[#A88B67]">
-                      ₹{(totalPrice + (totalPrice >= 500 ? 0 : 50)).toFixed(2)}
+                      ₹{totalPrice.toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -670,15 +663,6 @@ const Cart = () => {
 
               {/* Additional Info */}
               <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">
-                {totalPrice >= 500 ? (
-                  <p className="text-green-600 font-medium">
-                    ✓ You qualify for free shipping!
-                  </p>
-                ) : (
-                  <p>
-                    Add ₹{(500 - totalPrice).toFixed(2)} more for free shipping
-                  </p>
-                )}
                 <p>✓ 30-day money-back guarantee</p>
                 <p>✓ Secure checkout</p>
               </div>
@@ -699,10 +683,7 @@ const Cart = () => {
                       <span>Checking Address...</span>
                     </>
                   ) : (
-                    <span>
-                      Pay Now - ₹
-                      {(totalPrice + (totalPrice >= 500 ? 0 : 50)).toFixed(2)}
-                    </span>
+                    <span>Go to Checkout - ₹{totalPrice.toFixed(2)}</span>
                   )}
                 </button>
               </div>
@@ -793,13 +774,12 @@ const Cart = () => {
               </div>
 
               <div className="flex space-x-3">
-                <button
-                  onClick={proceedWithPayment}
-                  disabled={!selectedAddress}
-                  className="flex-1 bg-[#4A5C3D] text-white py-2 rounded-lg hover:bg-[#3a4a2f] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                <Link
+                  to="/checkout"
+                  className="flex-1 bg-[#4A5C3D] text-white py-2 rounded-lg hover:bg-[#3a4a2f] disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-center"
                 >
-                  Proceed with Payment
-                </button>
+                  Go to Checkout
+                </Link>
                 <button
                   onClick={() => setShowAddressDialog(false)}
                   className="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg hover:bg-gray-300 transition-colors"
@@ -831,6 +811,12 @@ const Cart = () => {
         confirmText="Add Address"
         cancelText="Cancel"
         type="warning"
+      />
+
+      {/* Checkout Modal */}
+      <CheckoutModal
+        isOpen={showCheckoutModal}
+        onClose={() => setShowCheckoutModal(false)}
       />
     </div>
   );

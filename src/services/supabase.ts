@@ -504,7 +504,8 @@ export const ordersService = {
       payment_status?: string;
       payment_method?: string;
       currency?: string;
-    }
+    },
+    shippingAmount: number = 99
   ): Promise<Order> {
     // If payment_id is provided, check if an order with this payment_id already exists
     if (paymentData?.payment_id) {
@@ -536,8 +537,7 @@ export const ordersService = {
       return sum + (item.product?.price || 0) * item.quantity;
     }, 0);
 
-    // Calculate shipping (free for orders over ₹500, otherwise ₹50)
-    const shippingAmount = subtotal >= 500 ? 0 : 50;
+    // Use the provided shipping amount (calculated in frontend based on pincode)
     const total = subtotal + shippingAmount;
 
     // Create order with payment information
