@@ -17,44 +17,31 @@
    - Click "Generate Live Key"
    - Copy the `Key ID` and `Key Secret`
 
-## Step 3: Create Environment File
+## Step 3: Create Environment Files
 
-Create a `.env` file in your project root with the following content:
+Copy the example files and fill in your credentials:
 
-```env
-# Supabase Configuration
-SUPABASE_URL=your_supabase_url_here
-SUPABASE_ANON_KEY=your_supabase_anon_key_here
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
-
-# Razorpay Configuration (REQUIRED FOR PAYMENTS)
-RAZORPAY_KEY_ID=rzp_test_xxxxxxxxxxxxxxxxx
-RAZORPAY_KEY_SECRET=xxxxxxxxxxxxxxxxxxxxxxxx
-RAZORPAY_WEBHOOK_SECRET=your_webhook_secret_here
-
-# Server Configuration
-PORT=3001
-FRONTEND_URL=http://localhost:5173
-BACKEND_URL=http://localhost:3001
-
-# JWT Configuration
-JWT_SECRET=your_jwt_secret_here
-
-# Environment
-NODE_ENV=development
-
-# Frontend Environment Variables (for Vite)
-VITE_API_BASE_URL=http://localhost:3001/api
-VITE_RAZORPAY_KEY_ID=rzp_test_xxxxxxxxxxxxxxxxx
+```bash
+# Copy environment templates
+cp env.example .env
+cp server/env.example server/.env
 ```
 
-## Step 4: Replace Dummy Values
+Then edit both files with your actual Razorpay credentials.
 
-Replace the following dummy values with your actual Razorpay keys:
+## Step 4: Fill in Your Credentials
 
-- `rzp_test_xxxxxxxxxxxxxxxxx` → Your actual Razorpay Key ID
-- `xxxxxxxxxxxxxxxxxxxxxxxx` → Your actual Razorpay Key Secret
-- `your_webhook_secret_here` → Your webhook secret (optional for development)
+Edit the `.env` files with your actual Razorpay credentials:
+
+**Frontend (.env):**
+
+- `VITE_RAZORPAY_KEY_ID` → Your actual Razorpay Key ID
+
+**Backend (server/.env):**
+
+- `RAZORPAY_KEY_ID` → Your actual Razorpay Key ID
+- `RAZORPAY_KEY_SECRET` → Your actual Razorpay Key Secret
+- `RAZORPAY_WEBHOOK_SECRET` → Your webhook secret (optional for development)
 
 ## Step 5: Test the Integration
 

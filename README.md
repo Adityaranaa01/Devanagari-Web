@@ -22,35 +22,20 @@ A modern, full-stack e-commerce platform for Devanagari Health Mix products, bui
    ```
 
 2. **Set up environment variables:**
-   Create a `.env` file in the root directory:
+   Copy the example files and fill in your credentials:
 
-   ```env
-   # Supabase Configuration
-   SUPABASE_URL=your_supabase_url
-   SUPABASE_ANON_KEY=your_supabase_anon_key
-   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-
-   # Razorpay Configuration (REQUIRED FOR PAYMENTS)
-   RAZORPAY_KEY_ID=your_razorpay_key_id
-   RAZORPAY_KEY_SECRET=your_razorpay_key_secret
-   RAZORPAY_WEBHOOK_SECRET=your_razorpay_webhook_secret
-
-   # Server Configuration
-   PORT=5000
-   FRONTEND_URL=http://localhost:5173
-   BACKEND_URL=http://localhost:5000
-
-   # JWT Configuration
-   JWT_SECRET=your_jwt_secret
-
-   # Environment
-   NODE_ENV=development
+   ```bash
+   # Copy environment templates
+   cp env.example .env
+   cp server/env.example server/.env
    ```
+
+   Then edit both files with your actual credentials.
 
 3. **Set up the database:**
 
    - Go to your Supabase dashboard
-   - Run the SQL script from `supabase-schema.sql` in the SQL Editor
+   - Run the SQL script from `database-schema.sql` in the SQL Editor
    - This will create all necessary tables and policies
 
 4. **Start the development servers:**
@@ -65,7 +50,7 @@ A modern, full-stack e-commerce platform for Devanagari Health Mix products, bui
 
 5. **Access the application:**
    - Frontend: http://localhost:5173
-   - Payment API: http://localhost:5000
+   - Payment API: http://localhost:3001
 
 ## 🛠️ Available Scripts
 

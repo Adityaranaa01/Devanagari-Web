@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import { CreditCard, Loader2 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import razorpayService, { 
-  type RazorpayFailureResponse, 
+import React, { useState } from "react";
+import { CreditCard, Loader2 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import razorpayService, {
+  type RazorpayFailureResponse,
   type RazorpayPaymentResponse,
-  type CartItem 
-} from '../services/razorpay';
+  type CartItem,
+} from "../services/razorpay";
 
 interface RazorpayPaymentProps {
   amount: number; // Amount in USD
@@ -21,50 +21,53 @@ interface RazorpayPaymentProps {
 const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
   amount,
   cartItems = [],
-  currency = 'USD',
+  currency = "INR",
   onSuccess,
   onError,
   disabled = false,
-  className = '',
-  children
+  className = "",
+  children,
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const { user } = useAuth();
 
   const handlePayment = async () => {
     if (!user?.email) {
-      onError(new Error('Please sign in to make a payment'));
+      onError(new Error("Please sign in to make a payment"));
       return;
     }
 
     try {
       setIsProcessing(true);
 
-      console.log('Processing payment:', {
+      console.log("Processing payment:", {
         originalAmount: amount,
         currency,
         user: user.email,
-        itemsCount: cartItems.length
+        itemsCount: cartItems.length,
       });
 
-      // Create order on server (service handles USD to INR conversion)
+      // Create order on server (amount is already in INR)
       const order = await razorpayService.createOrder(
-        amount, // Amount in USD
+        amount, // Amount in INR
         cartItems, // Cart items
         user.email
       );
 
       // Get user information
-      const userName = user.user_metadata?.full_name || 
-                      user.user_metadata?.name || 
-                      user.email?.split('@')[0] || 
-                      'Customer';
-      
-      const userPhone = user.user_metadata?.phone || '';
+      const userName =
+        user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        user.email?.split("@")[0] ||
+        "Customer";
+
+      const userPhone = user.user_metadata?.phone || "";
 
       // Check if Razorpay SDK is loaded
       if (!window.Razorpay) {
-        throw new Error('Razorpay SDK not loaded. Please refresh the page and try again.');
+        throw new Error(
+          "Razorpay SDK not loaded. Please refresh the page and try again."
+        );
       }
 
       // Get Razorpay configuration
@@ -75,27 +78,34 @@ const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
         key: config.key_id,
         amount: order.amount,
         currency: order.currency,
-        name: 'Devanagari Web',
-        description: 'Purchase from Devanagari Web Store',
-        image: '/logo.png',
+        name: "Devanagari Web",
+        description: "Purchase from Devanagari Web Store",
+        image: "/logo.png",
         order_id: order.id,
         handler: async (response: RazorpayPaymentResponse) => {
           try {
-            console.log('✅ Payment successful:', response.razorpay_payment_id);
-            
+            console.log("✅ Payment successful:", response.razorpay_payment_id);
+
             // Verify payment on server
-            const verificationResult = await razorpayService.verifyPayment(response);
-            
+            const verificationResult = await razorpayService.verifyPayment(
+              response
+            );
+
             if (verificationResult.isValid) {
-              console.log('✅ Payment verified successfully');
+              console.log("✅ Payment verified successfully");
               onSuccess(response);
             } else {
-              console.error('❌ Payment verification failed');
-              throw new Error('Payment verification failed. Please contact support.');
+              console.error("❌ Payment verification failed");
+              throw new Error(
+                "Payment verification failed. Please contact support."
+              );
             }
           } catch (verifyError) {
-            console.error('Payment verification error:', verifyError);
-            const errorMsg = verifyError instanceof Error ? verifyError.message : 'Unknown error';
+            console.error("Payment verification error:", verifyError);
+            const errorMsg =
+              verifyError instanceof Error
+                ? verifyError.message
+                : "Unknown error";
             onError(new Error(`Payment verification failed: ${errorMsg}`));
           } finally {
             setIsProcessing(false);
@@ -104,63 +114,73 @@ const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
         prefill: {
           name: userName,
           email: user.email,
-          contact: userPhone
+          contact: userPhone,
         },
         notes: {
-          address: 'Devanagari Web Store'
+          address: "Devanagari Web Store",
         },
         theme: {
-          color: '#4A5C3D'
+          color: "#4A5C3D",
         },
         modal: {
           ondismiss: () => {
-            const error = new Error('Payment cancelled by user');
-            console.log('❌ Payment cancelled');
+            const error = new Error("Payment cancelled by user");
+            console.log("❌ Payment cancelled");
             setIsProcessing(false);
             onError(error);
-          }
+          },
         },
         retry: {
           enabled: true,
-          max_count: 3
+          max_count: 3,
         },
         timeout: 300, // 5 minutes
-        remember_customer: true
+        remember_customer: true,
       };
 
       // Create and open Razorpay instance
       const razorpayInstance = new window.Razorpay(options);
-      
-      razorpayInstance.on('payment.failed', (response: RazorpayFailureResponse) => {
-        const error = new Error(`Payment failed: ${response.error.description}`);
-        console.error('❌ Payment failed:', response.error);
-        setIsProcessing(false);
-        onError(error);
-      });
+
+      razorpayInstance.on(
+        "payment.failed",
+        (response: RazorpayFailureResponse) => {
+          const error = new Error(
+            `Payment failed: ${response.error.description}`
+          );
+          console.error("❌ Payment failed:", response.error);
+          setIsProcessing(false);
+          onError(error);
+        }
+      );
 
       razorpayInstance.open();
-
     } catch (error) {
-      console.error('Payment error:', error);
-      
+      console.error("Payment error:", error);
+
       // Provide user-friendly error messages
-      let errorMessage = 'Payment failed';
+      let errorMessage = "Payment failed";
       if (error instanceof Error) {
-        if (error.message.includes('cancelled')) {
-          errorMessage = 'Payment was cancelled';
-        } else if (error.message.includes('network') || error.message.includes('fetch')) {
-          errorMessage = 'Network error. Please check your connection and try again.';
-        } else if (error.message.includes('verification')) {
+        if (error.message.includes("cancelled")) {
+          errorMessage = "Payment was cancelled";
+        } else if (
+          error.message.includes("network") ||
+          error.message.includes("fetch")
+        ) {
+          errorMessage =
+            "Network error. Please check your connection and try again.";
+        } else if (error.message.includes("verification")) {
           errorMessage = error.message;
-        } else if (error.message.includes('SDK not loaded')) {
-          errorMessage = 'Payment system not ready. Please refresh the page and try again.';
-        } else if (error.message.includes('configuration')) {
-          errorMessage = 'Payment system configuration error. Please contact support.';
+        } else if (error.message.includes("SDK not loaded")) {
+          errorMessage =
+            "Payment system not ready. Please refresh the page and try again.";
+        } else if (error.message.includes("configuration")) {
+          errorMessage =
+            "Payment system configuration error. Please contact support.";
         } else {
-          errorMessage = error.message || 'An unexpected error occurred';
+          errorMessage = error.message || "An unexpected error occurred";
         }
       }
-      
+
       onError(new Error(errorMessage));
       setIsProcessing(false);
     }
@@ -169,17 +189,16 @@ const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
   // Format display amount
   const getDisplayAmount = () => {
     try {
-      if (currency === 'USD') {
-        // Show both USD and converted INR
-        const conversionResult = razorpayService.convertUSDToINRDisplay(amount);
-        return `$${amount.toFixed(2)} (${conversionResult.formatted})`;
+      if (currency === "INR") {
+        // Show amount in INR
+        return `₹${amount.toFixed(2)}`;
       } else {
         // Show amount in the specified currency
-        return razorpayService.formatAmount(amount * 100, currency);
+        return `${currency === "USD" ? "$" : "₹"}${amount.toFixed(2)}`;
       }
     } catch (error) {
-      console.warn('Error formatting amount:', error);
-      return `$${amount.toFixed(2)}`;
+      console.warn("Error formatting amount:", error);
+      return `₹${amount.toFixed(2)}`;
     }
   };
 
@@ -200,7 +219,13 @@ const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
         ${className}
       `}
       type="button"
-      aria-label={!isUserAuthenticated ? "Sign in to pay" : isProcessing ? "Processing payment" : `Pay ${getDisplayAmount()}`}
+      aria-label={
+        !isUserAuthenticated
+          ? "Sign in to pay"
+          : isProcessing
+          ? "Processing payment"
+          : `Pay ${getDisplayAmount()}`
+      }
     >
       {!isUserAuthenticated ? (
         <>

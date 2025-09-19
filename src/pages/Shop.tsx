@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
+import { useNotification } from "../context/NotificationContext";
 import { supabase } from "../lib/supabaseClient";
 import { checkDatabaseSetup } from "../utils/databaseCheck";
 import {
@@ -38,6 +39,7 @@ const Shop = () => {
   );
   const { addItem } = useCart();
   const { user } = useAuth();
+  const { showError, showWarning, showInfo } = useNotification();
 
   useEffect(() => {
     const initializeShop = async () => {
@@ -129,13 +131,18 @@ const Shop = () => {
 
       // Show more specific error messages
       if (errorMessage.includes("Database tables not found")) {
-        alert(
-          `🚨 Database Setup Required!\n\n${errorMessage}\n\nPlease follow the setup instructions to create the required database tables.`
+        showError(
+          "Database Setup Required",
+          `${errorMessage}\n\nPlease follow the setup instructions to create the required database tables.`
         );
       } else if (errorMessage.includes("User must be logged in")) {
-        alert("Please sign in to add items to your cart");
+        showWarning(
+          "Sign In Required",
+          "Please sign in to add items to your cart"
+        );
       } else {
-        alert(
+        showError(
+          "Add to Cart Failed",
           `Failed to add item to cart: ${errorMessage}\n\nPlease check the console for more details.`
         );
       }
@@ -208,11 +215,11 @@ const Shop = () => {
     <div className="bg-[#FDFBF8] pt-16 min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-[#4A5C3D] mb-4">
+        <div className="text-center mb-8 sm:mb-12">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#4A5C3D] mb-3 sm:mb-4">
             Devanagari Health Mix
           </h1>
-          <p className="text-lg text-gray-700 max-w-3xl mx-auto">
+          <p className="text-base sm:text-lg text-gray-700 max-w-3xl mx-auto px-4">
             A premium blend of 21 natural grains, millets, and pulses, carefully
             crafted to provide complete nutrition. Rich in protein, fiber,
             vitamins, and minerals for your daily wellness journey.
@@ -220,7 +227,7 @@ const Shop = () => {
         </div>
 
         {/* Product Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mb-8 sm:mb-12">
           {products.length > 0 ? (
             products.map((product, index) => (
               <ProductCard
@@ -246,21 +253,35 @@ const Shop = () => {
         </div>
 
         {/* Additional Info */}
-        <div className="bg-white rounded-xl p-8 shadow-lg">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+        <div className="bg-white rounded-xl p-4 sm:p-6 lg:p-8 shadow-lg">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 text-center">
             <div className="flex items-center justify-center space-x-2">
-              <CheckCircle className="text-green-500" size={24} />
-              <span className="text-gray-700">
-                Free shipping on orders over $50
+              <CheckCircle
+                className="text-green-500"
+                size={20}
+                className="sm:w-6 sm:h-6"
+              />
+              <span className="text-sm sm:text-base text-gray-700">
+                Free shipping on orders over ₹500
               </span>
             </div>
             <div className="flex items-center justify-center space-x-2">
-              <CheckCircle className="text-green-500" size={24} />
-              <span className="text-gray-700">30-day money-back guarantee</span>
+              <CheckCircle
+                className="text-green-500"
+                size={20}
+                className="sm:w-6 sm:h-6"
+              />
+              <span className="text-sm sm:text-base text-gray-700">
+                30-day money-back guarantee
+              </span>
             </div>
-            <div className="flex items-center justify-center space-x-2">
-              <CheckCircle className="text-green-500" size={24} />
-              <span className="text-gray-700">
+            <div className="flex items-center justify-center space-x-2 sm:col-span-2 lg:col-span-1">
+              <CheckCircle
+                className="text-green-500"
+                size={20}
+                className="sm:w-6 sm:h-6"
+              />
+              <span className="text-sm sm:text-base text-gray-700">
                 Made from 100% natural ingredients
               </span>
             </div>
@@ -304,48 +325,54 @@ const ProductCard: React.FC<ProductCardProps> = ({
       </div>
 
       {/* Product Info */}
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xl font-bold text-[#4A5C3D]">{product.name}</h3>
+      <div className="p-4 sm:p-6">
+        <div className="flex items-start justify-between mb-2">
+          <h3 className="text-lg sm:text-xl font-bold text-[#4A5C3D] pr-2">
+            {product.name}
+          </h3>
           {isBestValue && (
-            <span className="bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full">
+            <span className="bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full flex-shrink-0">
               Best Value
             </span>
           )}
         </div>
 
-        <p className="text-gray-600 text-sm mb-4">{product.description}</p>
+        <p className="text-gray-600 text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-2">
+          {product.description}
+        </p>
 
-        <div className="flex items-center justify-between mb-4">
-          <div className="text-2xl font-bold text-[#A88B67]">
-            ${product.price.toFixed(2)}
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <div className="text-xl sm:text-2xl font-bold text-[#A88B67]">
+            ₹{product.price.toFixed(2)}
           </div>
-          <div className="text-sm text-gray-500">{product.weight}g pack</div>
+          <div className="text-xs sm:text-sm text-gray-500">
+            {product.weight}g pack
+          </div>
         </div>
 
         {/* Stock indicator */}
         {product.stock > 0 && (
-          <div className="text-sm text-green-600 mb-2">
+          <div className="text-xs sm:text-sm text-green-600 mb-2">
             {product.stock} in stock
           </div>
         )}
 
         {/* Quantity Selector */}
-        <div className="flex items-center justify-center space-x-4 mb-4">
+        <div className="flex items-center justify-center space-x-3 sm:space-x-4 mb-3 sm:mb-4">
           <button
             onClick={decrementQuantity}
-            className="w-8 h-8 rounded-full border-2 border-[#4A5C3D] flex items-center justify-center text-[#4A5C3D] hover:bg-[#4A5C3D] hover:text-white transition-colors"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-[#4A5C3D] flex items-center justify-center text-[#4A5C3D] hover:bg-[#4A5C3D] hover:text-white transition-colors"
           >
-            <Minus size={14} />
+            <Minus size={12} className="sm:w-3.5 sm:h-3.5" />
           </button>
-          <span className="text-lg font-semibold text-[#4A5C3D] w-8 text-center">
+          <span className="text-base sm:text-lg font-semibold text-[#4A5C3D] w-6 sm:w-8 text-center">
             {quantity}
           </span>
           <button
             onClick={incrementQuantity}
-            className="w-8 h-8 rounded-full border-2 border-[#4A5C3D] flex items-center justify-center text-[#4A5C3D] hover:bg-[#4A5C3D] hover:text-white transition-colors"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-[#4A5C3D] flex items-center justify-center text-[#4A5C3D] hover:bg-[#4A5C3D] hover:text-white transition-colors"
           >
-            <Plus size={14} />
+            <Plus size={12} className="sm:w-3.5 sm:h-3.5" />
           </button>
         </div>
 
@@ -353,7 +380,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
         <button
           onClick={() => onAddToCart(product, quantity)}
           disabled={isAdding || product.stock === 0}
-          className={`w-full py-3 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 ${
+          className={`w-full py-2.5 sm:py-3 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-1.5 sm:space-x-2 text-sm sm:text-base ${
             showSuccess
               ? "bg-green-500 text-white"
               : isAdding || product.stock === 0
@@ -363,12 +390,12 @@ const ProductCard: React.FC<ProductCardProps> = ({
         >
           {showSuccess ? (
             <>
-              <CheckCircle size={20} />
+              <CheckCircle size={16} className="sm:w-5 sm:h-5" />
               <span>Added to Cart!</span>
             </>
           ) : isAdding ? (
             <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white"></div>
               <span>Adding...</span>
             </>
           ) : product.stock === 0 ? (
@@ -377,9 +404,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
             </>
           ) : (
             <>
-              <ShoppingCart size={20} />
-              <span>
-                Add to Cart - ${(product.price * quantity).toFixed(2)}
+              <ShoppingCart size={16} className="sm:w-5 sm:h-5" />
+              <span className="truncate">
+                Add to Cart - ₹{(product.price * quantity).toFixed(2)}
               </span>
             </>
           )}

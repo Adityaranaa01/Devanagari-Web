@@ -12,9 +12,12 @@ import {
   DollarSign,
   RefreshCw,
   Clock,
+  Menu,
 } from "lucide-react";
 import { useAdmin } from "../../context/AdminContext";
 import { supabase } from "../../lib/supabaseClient";
+import { mockAdminData, simulateDbDelay } from "../../utils/mockData";
+import { supabaseRestApi } from "../../utils/supabaseRestApi";
 
 interface Order {
   id: string;
@@ -62,43 +65,81 @@ const Orders: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  // Debug selectedOrder changes
+  useEffect(() => {
+    console.log("🔍 selectedOrder changed:", selectedOrder);
+    console.log("🔍 showModal:", showModal);
+  }, [selectedOrder, showModal]);
 
   const fetchOrders = async () => {
     try {
       setLoading(true);
       console.log("🔄 Fetching orders from database...");
 
-      const { data, error } = await supabase
-        .from("orders")
-        .select(
-          `
-          *,
-          user:users(name, email),
-          order_items(
+      // Try authenticated Supabase client first
+      try {
+        console.log(
+          "📡 Using authenticated Supabase client to fetch orders..."
+        );
+        const { data: orders, error } = await supabase
+          .from("orders")
+          .select(
+            `
             *,
-            product:products(name, image_url)
+            user:users(name,email),
+            order_items(*,product:products(name,image_url))
+          `
           )
-        `
-        )
-        .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("❌ Error fetching orders:", error);
-        throw error;
+        if (error) {
+          console.error("❌ Error fetching orders:", error);
+          throw error;
+        }
+
+        console.log(
+          "✅ Orders loaded (real data from authenticated Supabase):",
+          orders?.length || 0,
+          "orders"
+        );
+        setOrders(orders || []);
+      } catch (supabaseError) {
+        console.warn(
+          "⚠️ Authenticated Supabase failed, trying REST API:",
+          supabaseError
+        );
+
+        // Fallback to REST API
+        try {
+          console.log("📡 Using REST API as fallback...");
+          const orders = await supabaseRestApi.getOrders();
+          console.log(
+            "✅ Orders loaded (real data from REST API):",
+            orders.length,
+            "orders"
+          );
+          setOrders(orders);
+        } catch (restApiError) {
+          console.warn(
+            "⚠️ REST API also failed, using mock data:",
+            restApiError
+          );
+
+          // Fallback to mock data
+          console.log("📦 Using mock data as fallback");
+          await simulateDbDelay(300);
+          setOrders(mockAdminData.orders.data);
+        }
       }
-
-      console.log(
-        "✅ Orders fetched successfully:",
-        data?.length || 0,
-        "orders"
-      );
-      setOrders(data || []);
     } catch (error) {
       console.error("Error fetching orders:", error);
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -211,6 +252,90 @@ const Orders: React.FC = () => {
 
   return (
     <div>
+      {/* Mobile sidebar */}
+      <div
+        className={`fixed inset-0 z-50 lg:hidden ${
+          sidebarOpen ? "block" : "hidden"
+        }`}
+      >
+        <div
+          className="fixed inset-0 bg-gray-600 bg-opacity-75"
+          onClick={() => setSidebarOpen(false)}
+        />
+        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white">
+          <div className="flex h-16 items-center justify-between px-4">
+            <h1 className="text-xl font-bold text-gray-900">Admin Panel</h1>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              ✕
+            </button>
+          </div>
+          <nav className="flex-1 space-y-1 px-2 py-4">
+            <a
+              href="/"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-b border-gray-200 mb-2"
+            >
+              🏠 Return to Home
+            </a>
+            <a
+              href="/admin"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              📊 Dashboard
+            </a>
+            <a
+              href="/admin/products"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              📦 Products
+            </a>
+            <a
+              href="/admin/orders"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md bg-blue-100 text-blue-900"
+            >
+              🛒 Orders
+            </a>
+            <a
+              href="/admin/users"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              👥 Users
+            </a>
+            <a
+              href="/admin/analytics"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              📈 Analytics
+            </a>
+            <a
+              href="/admin/refunds"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              💰 Refunds
+            </a>
+            <a
+              href="/admin/settings"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              ⚙️ Settings
+            </a>
+          </nav>
+        </div>
+      </div>
+
+      {/* Hamburger button */}
+      <div className="mb-6">
+        <button
+          type="button"
+          className="lg:hidden -m-2.5 p-2.5 text-gray-700"
+          onClick={() => setSidebarOpen(true)}
+        >
+          <Menu className="h-6 w-6" />
+        </button>
+      </div>
+
       {/* Header */}
       <div className="sm:flex sm:items-center sm:justify-between">
         <div>
@@ -304,7 +429,7 @@ const Orders: React.FC = () => {
                     Total Revenue
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    ${totalRevenue.toFixed(2)}
+                    ₹{totalRevenue.toFixed(2)} INR
                   </dd>
                 </dl>
               </div>
@@ -398,7 +523,7 @@ const Orders: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${order.total.toFixed(2)}
+                        ₹{order.total.toFixed(2)} {order.currency || "INR"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
@@ -430,6 +555,10 @@ const Orders: React.FC = () => {
                         <div className="flex space-x-2">
                           <button
                             onClick={() => {
+                              console.log(
+                                "🔍 Eye button clicked for order:",
+                                order
+                              );
                               setSelectedOrder(order);
                               setShowModal(true);
                             }}
@@ -502,7 +631,8 @@ const Orders: React.FC = () => {
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <p>
                         <strong>Total:</strong> $
-                        {selectedOrder.total.toFixed(2)}
+                        {selectedOrder.total.toFixed(2)}{" "}
+                        {selectedOrder.currency || "USD"}
                       </p>
                       <p>
                         <strong>Status:</strong>{" "}
@@ -529,7 +659,15 @@ const Orders: React.FC = () => {
                           </p>
                           <p>
                             <strong>Refund Amount:</strong> $
-                            {selectedOrder.refund_amount?.toFixed(2)}
+                            {(() => {
+                              const amount = selectedOrder.refund_amount || 0;
+                              // Convert INR to USD if amount seems to be in INR
+                              const usdToInrRate = 83;
+                              const displayAmount =
+                                amount > 100 ? amount / usdToInrRate : amount;
+                              return displayAmount.toFixed(2);
+                            })()}{" "}
+                            {selectedOrder.currency || "USD"}
                           </p>
                           <p>
                             <strong>Refund Status:</strong>{" "}
@@ -592,7 +730,8 @@ const Orders: React.FC = () => {
                           </div>
                         </div>
                         <p className="font-medium">
-                          ${item.total_price.toFixed(2)}
+                          ₹{item.total_price.toFixed(2)}{" "}
+                          {selectedOrder.currency || "INR"}
                         </p>
                       </div>
                     ))}

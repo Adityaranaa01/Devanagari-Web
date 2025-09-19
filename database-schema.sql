@@ -226,9 +226,9 @@
     RETURNS BOOLEAN AS $$
     BEGIN
         RETURN EXISTS (
-            SELECT 1 FROM auth.users au
-            WHERE au.id = auth.uid() 
-            AND au.email = 'adityapiyush71@gmail.com'
+            SELECT 1 FROM public.users u
+            WHERE u.id = auth.uid() 
+            AND u.is_admin = true
         );
     END;
     $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -329,16 +329,17 @@ CREATE POLICY "Admins can manage all orders" ON public.orders
     CREATE OR REPLACE FUNCTION public.handle_new_user()
     RETURNS TRIGGER AS $$
     BEGIN
-        INSERT INTO public.users (id, email, name, full_name, avatar_url, is_admin, role, is_active)
+        INSERT INTO public.users (id, email, name, full_name, avatar_url, is_admin, role, is_active, last_login)
         VALUES (
             NEW.id,
             NEW.email,
             COALESCE(NEW.raw_user_meta_data->>'name', NEW.email),
             COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', NEW.email),
             NEW.raw_user_meta_data->>'avatar_url',
-            CASE WHEN NEW.email = 'adityapiyush71@gmail.com' THEN true ELSE false END,
-            CASE WHEN NEW.email = 'adityapiyush71@gmail.com' THEN 'super_admin' ELSE 'user' END,
-            true
+            false, -- Default to non-admin, can be updated manually
+            'user', -- Default role, can be updated manually
+            true,
+            NOW() -- Set last_login to current timestamp
         );
         RETURN NEW;
     END;
@@ -349,21 +350,40 @@ CREATE POLICY "Admins can manage all orders" ON public.orders
         AFTER INSERT ON auth.users
         FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
-    -- Function to generate order numbers
+    -- Create a sequence for order numbers
+    CREATE SEQUENCE IF NOT EXISTS public.order_number_seq START 1;
+
+    -- Function to initialize sequence with existing order numbers
+    CREATE OR REPLACE FUNCTION public.initialize_order_number_sequence()
+    RETURNS VOID AS $$
+    DECLARE
+        max_order_num INTEGER;
+    BEGIN
+        -- Get the maximum existing order number
+        SELECT COALESCE(MAX(CAST(SUBSTRING(order_number FROM 'ORD-(\d+)') AS INTEGER)), 0)
+        INTO max_order_num
+        FROM public.orders
+        WHERE order_number ~ '^ORD-\d+$';
+        
+        -- Set the sequence to start from the next number
+        IF max_order_num > 0 THEN
+            PERFORM setval('public.order_number_seq', max_order_num, true);
+        END IF;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    -- Function to generate order numbers using sequence
     CREATE OR REPLACE FUNCTION public.generate_order_number()
     RETURNS TEXT AS $$
     DECLARE
         order_num TEXT;
-        counter INTEGER;
+        next_val INTEGER;
     BEGIN
-        -- Get the next counter value
-        SELECT COALESCE(MAX(CAST(SUBSTRING(order_number FROM 'ORD-(\d+)') AS INTEGER)), 0) + 1
-        INTO counter
-        FROM public.orders
-        WHERE order_number ~ '^ORD-\d+$';
+        -- Get the next value from the sequence
+        next_val := nextval('public.order_number_seq');
         
         -- Format as ORD-000001, ORD-000002, etc.
-        order_num := 'ORD-' || LPAD(counter::TEXT, 6, '0');
+        order_num := 'ORD-' || LPAD(next_val::TEXT, 6, '0');
         
         RETURN order_num;
     END;
@@ -401,6 +421,29 @@ CREATE POLICY "Admins can manage all orders" ON public.orders
         AFTER INSERT OR UPDATE OR DELETE ON public.order_items
         FOR EACH ROW EXECUTE FUNCTION public.update_order_totals();
 
+    -- Function to check for existing order by payment_id
+    CREATE OR REPLACE FUNCTION public.check_existing_order_by_payment_id()
+    RETURNS TRIGGER AS $$
+    DECLARE
+        existing_order_id UUID;
+    BEGIN
+        -- If payment_id is provided, check if an order with this payment_id already exists
+        IF NEW.payment_id IS NOT NULL THEN
+            SELECT id INTO existing_order_id
+            FROM public.orders
+            WHERE payment_id = NEW.payment_id
+            LIMIT 1;
+            
+            -- If an order with this payment_id already exists, prevent insertion
+            IF existing_order_id IS NOT NULL THEN
+                RAISE EXCEPTION 'Order with payment_id % already exists (order_id: %)', NEW.payment_id, existing_order_id;
+            END IF;
+        END IF;
+        
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
     -- Function to set order number on insert
     CREATE OR REPLACE FUNCTION public.set_order_number()
     RETURNS TRIGGER AS $$
@@ -411,6 +454,11 @@ CREATE POLICY "Admins can manage all orders" ON public.orders
         RETURN NEW;
     END;
     $$ LANGUAGE plpgsql;
+
+    -- Trigger to check for existing order by payment_id
+    CREATE TRIGGER check_existing_order_by_payment_id_trigger
+        BEFORE INSERT ON public.orders
+        FOR EACH ROW EXECUTE FUNCTION public.check_existing_order_by_payment_id();
 
     -- Trigger to set order number
     CREATE TRIGGER set_order_number_trigger
@@ -448,7 +496,7 @@ CREATE POLICY "Admins can manage all orders" ON public.orders
         'Devanagari Health Mix 200g',
         'A premium blend of 21 natural grains, millets, and pulses, carefully crafted to provide complete nutrition. This 200g pack is perfect for trying our signature health mix.',
         'Premium 21-grain health mix - 200g pack',
-        19.99,
+        200.00,
         '/src/assets/shop/First page Flipkart.png',
         100,
         200,
@@ -459,7 +507,7 @@ CREATE POLICY "Admins can manage all orders" ON public.orders
         'Devanagari Health Mix 450g',
         'A premium blend of 21 natural grains, millets, and pulses, carefully crafted to provide complete nutrition. This 450g pack offers great value for regular consumption.',
         'Premium 21-grain health mix - 450g pack',
-        29.99,
+        400.00,
         '/src/assets/shop/First page Flipkart.png',
         100,
         450,
@@ -470,7 +518,7 @@ CREATE POLICY "Admins can manage all orders" ON public.orders
         'Devanagari Health Mix 900g',
         'A premium blend of 21 natural grains, millets, and pulses, carefully crafted to provide complete nutrition. This 900g family pack is perfect for households.',
         'Premium 21-grain health mix - 900g family pack',
-        49.99,
+        800.00,
         '/src/assets/shop/First page Flipkart.png',
         100,
         900,
@@ -479,22 +527,24 @@ CREATE POLICY "Admins can manage all orders" ON public.orders
     );
 
     -- Sync existing auth.users to public.users
-    INSERT INTO public.users (id, email, name, full_name, avatar_url, is_admin, role, is_active)
+    INSERT INTO public.users (id, email, name, full_name, avatar_url, is_admin, role, is_active, last_login)
     SELECT 
         au.id,
         au.email,
         COALESCE(au.raw_user_meta_data->>'name', au.email),
         COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', au.email),
         au.raw_user_meta_data->>'avatar_url',
-        CASE WHEN au.email = 'adityapiyush71@gmail.com' THEN true ELSE false END,
-        CASE WHEN au.email = 'adityapiyush71@gmail.com' THEN 'super_admin' ELSE 'user' END,
-        true
+        false, -- Default to non-admin, can be updated manually
+        'user', -- Default role, can be updated manually
+        true,
+        NOW() -- Set last_login to current timestamp
     FROM auth.users au
     WHERE au.id NOT IN (SELECT id FROM public.users)
     ON CONFLICT (id) DO UPDATE SET 
-        is_admin = CASE WHEN EXCLUDED.email = 'adityapiyush71@gmail.com' THEN true ELSE EXCLUDED.is_admin END,
-        role = CASE WHEN EXCLUDED.email = 'adityapiyush71@gmail.com' THEN 'super_admin' ELSE EXCLUDED.role END,
+        is_admin = EXCLUDED.is_admin, -- Keep existing admin status
+        role = EXCLUDED.role, -- Keep existing role
         is_active = true,
+        last_login = COALESCE(public.users.last_login, NOW()), -- Keep existing last_login or set to now
         updated_at = NOW();
 
     -- =====================================================
@@ -526,4 +576,37 @@ CREATE POLICY "Admins can manage all orders" ON public.orders
     SELECT 'Users count:' as info, COUNT(*) as count FROM public.users;
     SELECT 'Products count:' as info, COUNT(*) as count FROM public.products;
     SELECT 'Admin users:' as info, COUNT(*) as count FROM public.users WHERE is_admin = true;
+
+    -- Initialize order number sequence with existing data
+    SELECT public.initialize_order_number_sequence();
+
+    -- =====================================================
+    -- 9. ADMIN SETUP INSTRUCTIONS
+    -- =====================================================
+    
+    -- To set up admin users after running this schema:
+    -- 1. Replace 'your-admin-email@example.com' with the actual admin email
+    -- 2. Run this SQL command:
+    -- UPDATE public.users 
+    -- SET is_admin = true, role = 'super_admin' 
+    -- WHERE email = 'your-admin-email@example.com';
+    
+    -- For multiple admin users:
+    -- UPDATE public.users 
+    -- SET is_admin = true, role = 'admin' 
+    -- WHERE email IN ('admin1@example.com', 'admin2@example.com');
+
+    -- =====================================================
+    -- 10. UPDATE EXISTING USERS (One-time fix for existing data)
+    -- =====================================================
+    
+    -- Update all existing users who have never logged in (last_login is NULL)
+    -- This fixes the "never" issue in the admin panel for existing users
+    UPDATE public.users 
+    SET last_login = NOW(), 
+        updated_at = NOW()
+    WHERE last_login IS NULL;
+
+    -- Database setup complete!
+    SELECT 'Database setup complete!' as status;
 

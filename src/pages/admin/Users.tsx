@@ -11,6 +11,7 @@ import {
   Calendar,
   Shield,
   RefreshCw,
+  Menu,
 } from "lucide-react";
 import { useAdmin } from "../../context/AdminContext";
 import { supabase } from "../../lib/supabaseClient";
@@ -39,6 +40,7 @@ const Users: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [newUser, setNewUser] = useState({
     email: "",
@@ -63,14 +65,21 @@ const Users: React.FC = () => {
 
       if (error) {
         console.error("❌ Error fetching users:", error);
+        console.error("Error details:", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
         throw error;
       }
 
       console.log("✅ Users fetched successfully:", data?.length || 0, "users");
-      console.log("📊 Users data:", data);
       setUsers(data || []);
     } catch (error) {
       console.error("Error fetching users:", error);
+      // Set empty array on error to prevent UI issues
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -248,6 +257,90 @@ const Users: React.FC = () => {
 
   return (
     <div>
+      {/* Mobile sidebar */}
+      <div
+        className={`fixed inset-0 z-50 lg:hidden ${
+          sidebarOpen ? "block" : "hidden"
+        }`}
+      >
+        <div
+          className="fixed inset-0 bg-gray-600 bg-opacity-75"
+          onClick={() => setSidebarOpen(false)}
+        />
+        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white">
+          <div className="flex h-16 items-center justify-between px-4">
+            <h1 className="text-xl font-bold text-gray-900">Admin Panel</h1>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              ✕
+            </button>
+          </div>
+          <nav className="flex-1 space-y-1 px-2 py-4">
+            <a
+              href="/"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-b border-gray-200 mb-2"
+            >
+              🏠 Return to Home
+            </a>
+            <a
+              href="/admin"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              📊 Dashboard
+            </a>
+            <a
+              href="/admin/products"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              📦 Products
+            </a>
+            <a
+              href="/admin/orders"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              🛒 Orders
+            </a>
+            <a
+              href="/admin/users"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md bg-blue-100 text-blue-900"
+            >
+              👥 Users
+            </a>
+            <a
+              href="/admin/analytics"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              📈 Analytics
+            </a>
+            <a
+              href="/admin/refunds"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              💰 Refunds
+            </a>
+            <a
+              href="/admin/settings"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              ⚙️ Settings
+            </a>
+          </nav>
+        </div>
+      </div>
+
+      {/* Hamburger button */}
+      <div className="mb-6">
+        <button
+          type="button"
+          className="lg:hidden -m-2.5 p-2.5 text-gray-700"
+          onClick={() => setSidebarOpen(true)}
+        >
+          <Menu className="h-6 w-6" />
+        </button>
+      </div>
+
       {/* Header */}
       <div className="sm:flex sm:items-center sm:justify-between">
         <div>

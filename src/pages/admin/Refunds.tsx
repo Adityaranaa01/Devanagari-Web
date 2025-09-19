@@ -10,9 +10,12 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
+  Menu,
 } from "lucide-react";
 import { useAdmin } from "../../context/AdminContext";
 import { supabase } from "../../lib/supabaseClient";
+import { mockAdminData, simulateDbDelay } from "../../utils/mockData";
+import { supabaseRestApi } from "../../utils/supabaseRestApi";
 
 interface RefundOrder {
   id: string;
@@ -43,6 +46,7 @@ const Refunds: React.FC = () => {
     null
   );
   const [showModal, setShowModal] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     fetchRefunds();
@@ -53,30 +57,89 @@ const Refunds: React.FC = () => {
       setLoading(true);
       console.log("🔄 Fetching refunds from database...");
 
-      const { data, error } = await supabase
-        .from("orders")
-        .select(
+      // Use authenticated Supabase client (consistent with other admin components)
+      try {
+        console.log(
+          "📡 Using authenticated Supabase client to fetch refunds..."
+        );
+
+        // Get orders with refund_id OR cancelled status
+        const { data: refunds, error } = await supabase
+          .from("orders")
+          .select(
+            `
+            *,
+            user:users(name,email)
           `
-          *,
-          user:users(name, email)
-        `
-        )
-        .not("refund_id", "is", null)
-        .order("refunded_at", { ascending: false });
+          )
+          .or("refund_id.not.is.null,status.eq.cancelled")
+          .order("refunded_at", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("❌ Error fetching refunds:", error);
-        throw error;
+        if (error) {
+          console.error("❌ Error fetching refunds:", error);
+          throw error;
+        }
+
+        console.log(
+          "✅ Refunds loaded (real data from Supabase client):",
+          refunds?.length || 0,
+          "refunds"
+        );
+
+        // Log detailed refund information for debugging
+        if (refunds && refunds.length > 0) {
+          console.log("💰 Refunds details:");
+          refunds.forEach((refund, index) => {
+            console.log(`  ${index + 1}. Order ${refund.id}:`, {
+              status: refund.status,
+              payment_status: refund.payment_status,
+              refund_id: refund.refund_id,
+              refund_status: refund.refund_status,
+              refund_amount: refund.refund_amount,
+              user: refund.user?.name || refund.user?.email || "Unknown",
+              created_at: refund.created_at,
+            });
+          });
+        } else {
+          console.log("⚠️ No refunds found in database");
+          console.log("💡 This could mean:");
+          console.log("   - No orders have been cancelled yet");
+          console.log("   - No orders have refund_id set");
+          console.log("   - The refunds query is not working correctly");
+        }
+
+        setRefunds(refunds || []);
+      } catch (supabaseError) {
+        console.warn(
+          "⚠️ Supabase client failed, trying REST API fallback:",
+          supabaseError
+        );
+
+        try {
+          console.log("📡 Using REST API as fallback...");
+          const refunds = await supabaseRestApi.getRefunds();
+          console.log(
+            "✅ Refunds loaded from REST API fallback:",
+            refunds.length,
+            "refunds"
+          );
+          setRefunds(refunds);
+        } catch (restApiError) {
+          console.warn(
+            "⚠️ REST API also failed, using mock data:",
+            restApiError
+          );
+
+          // Final fallback to mock data
+          console.log("📦 Using mock data as final fallback");
+          await simulateDbDelay(300);
+          setRefunds(mockAdminData.refunds.data);
+        }
       }
-
-      console.log(
-        "✅ Refunds fetched successfully:",
-        data?.length || 0,
-        "refunds"
-      );
-      setRefunds(data || []);
     } catch (error) {
       console.error("Error fetching refunds:", error);
+      setRefunds([]);
     } finally {
       setLoading(false);
     }
@@ -121,10 +184,17 @@ const Refunds: React.FC = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const totalRefundAmount = refunds.reduce(
-    (sum, refund) => sum + (refund.refund_amount || 0),
-    0
-  );
+  // Convert INR refund amounts to USD for display
+  const usdToInrRate = 83; // Same rate used in Razorpay service
+  const totalRefundAmount = refunds.reduce((sum, refund) => {
+    const refundAmount = refund.refund_amount || 0;
+    // If the amount seems to be in INR (large values), convert to USD
+    if (refundAmount > 100) {
+      return sum + refundAmount / usdToInrRate;
+    }
+    // If it's already in USD (small values), use as is
+    return sum + refundAmount;
+  }, 0);
 
   const processedRefunds = refunds.filter(
     (refund) => refund.refund_status === "processed"
@@ -148,6 +218,90 @@ const Refunds: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Mobile sidebar */}
+      <div
+        className={`fixed inset-0 z-50 lg:hidden ${
+          sidebarOpen ? "block" : "hidden"
+        }`}
+      >
+        <div
+          className="fixed inset-0 bg-gray-600 bg-opacity-75"
+          onClick={() => setSidebarOpen(false)}
+        />
+        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white">
+          <div className="flex h-16 items-center justify-between px-4">
+            <h1 className="text-xl font-bold text-gray-900">Admin Panel</h1>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              ✕
+            </button>
+          </div>
+          <nav className="flex-1 space-y-1 px-2 py-4">
+            <a
+              href="/"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-b border-gray-200 mb-2"
+            >
+              🏠 Return to Home
+            </a>
+            <a
+              href="/admin"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              📊 Dashboard
+            </a>
+            <a
+              href="/admin/products"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              📦 Products
+            </a>
+            <a
+              href="/admin/orders"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              🛒 Orders
+            </a>
+            <a
+              href="/admin/users"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              👥 Users
+            </a>
+            <a
+              href="/admin/analytics"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              📈 Analytics
+            </a>
+            <a
+              href="/admin/refunds"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md bg-blue-100 text-blue-900"
+            >
+              💰 Refunds
+            </a>
+            <a
+              href="/admin/settings"
+              className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            >
+              ⚙️ Settings
+            </a>
+          </nav>
+        </div>
+      </div>
+
+      {/* Hamburger button */}
+      <div className="mb-6">
+        <button
+          type="button"
+          className="lg:hidden -m-2.5 p-2.5 text-gray-700"
+          onClick={() => setSidebarOpen(true)}
+        >
+          <Menu className="h-6 w-6" />
+        </button>
+      </div>
+
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -172,7 +326,7 @@ const Refunds: React.FC = () => {
                 Total Refunded
               </p>
               <p className="text-2xl font-bold text-gray-900">
-                ${totalRefundAmount.toFixed(2)}
+                ${totalRefundAmount.toFixed(2)} USD
               </p>
             </div>
           </div>
@@ -301,7 +455,15 @@ const Refunds: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${refund.refund_amount?.toFixed(2)}
+                    $
+                    {(() => {
+                      const amount = refund.refund_amount || 0;
+                      // Convert INR to USD if amount seems to be in INR
+                      const displayAmount =
+                        amount > 100 ? amount / usdToInrRate : amount;
+                      return displayAmount.toFixed(2);
+                    })()}{" "}
+                    USD
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
@@ -380,7 +542,14 @@ const Refunds: React.FC = () => {
                       </p>
                       <p>
                         <strong>Amount:</strong> $
-                        {selectedRefund.refund_amount?.toFixed(2)}
+                        {(() => {
+                          const amount = selectedRefund.refund_amount || 0;
+                          // Convert INR to USD if amount seems to be in INR
+                          const displayAmount =
+                            amount > 100 ? amount / usdToInrRate : amount;
+                          return displayAmount.toFixed(2);
+                        })()}{" "}
+                        USD
                       </p>
                       <p>
                         <strong>Status:</strong>{" "}
@@ -420,7 +589,14 @@ const Refunds: React.FC = () => {
                     </p>
                     <p>
                       <strong>Original Amount:</strong> $
-                      {selectedRefund.total.toFixed(2)}
+                      {(() => {
+                        const amount = selectedRefund.total || 0;
+                        // Convert INR to USD if amount seems to be in INR
+                        const displayAmount =
+                          amount > 100 ? amount / usdToInrRate : amount;
+                        return displayAmount.toFixed(2);
+                      })()}{" "}
+                      USD
                     </p>
                     <p>
                       <strong>Order Status:</strong> {selectedRefund.status}

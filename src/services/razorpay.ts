@@ -174,15 +174,13 @@ const razorpayService = {
   },
 
   async createOrder(
-    amountInUSD: number,
+    amountInINR: number,
     cartItems: CartItem[],
     userEmail?: string
   ): Promise<RazorpayOrder> {
     try {
-      // Convert USD to INR (approximate rate: 1 USD = 83 INR)
-      const usdToInrRate = 83;
-      const amountInINR = Math.round(amountInUSD * usdToInrRate);
-      const amountInPaise = amountInINR * 100; // Convert to paise
+      // Amount is already in INR, convert to paise
+      const amountInPaise = Math.round(amountInINR * 100);
 
       const orderData = {
         amount: amountInPaise,
@@ -196,17 +194,15 @@ const razorpayService = {
               id: item.id,
               name: item.name,
               quantity: item.quantity,
-              price_usd: item.price,
+              price_inr: item.price,
             }))
           ),
-          original_amount_usd: amountInUSD,
-          conversion_rate: usdToInrRate,
+          original_amount_inr: amountInINR,
           created_from: "devanagari_web",
         },
       };
 
       console.log("📦 Creating Razorpay order:", {
-        amount_usd: amountInUSD,
         amount_inr: amountInINR,
         amount_paise: amountInPaise,
         items_count: cartItems.length,

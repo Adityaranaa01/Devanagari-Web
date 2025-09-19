@@ -4,7 +4,7 @@
 
 1. **Go to Supabase Dashboard**: https://supabase.com/dashboard
 2. **Open SQL Editor** and create a new query
-3. **Copy and paste** the contents of `supabase-schema.sql`
+3. **Copy and paste** the contents of `database-schema.sql`
 4. **Run the query** (Ctrl+Enter)
 5. **Done!** Your database is ready
 
@@ -23,6 +23,3 @@
 3. Visit http://localhost:5173
 
 **Need help?** Check the main README.md for complete setup instructions.
-
-
-7766c47a-312c-446c-82a5-0ea607607a0c

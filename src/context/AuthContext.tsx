@@ -33,6 +33,8 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<AuthResponse>;
   loginWithGoogle: () => Promise<AuthResponse>;
   logout: () => Promise<void>;
+  updateUser: (updatedUser: AuthUser) => void;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -97,6 +99,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       console.log(
         "⚠️ User creation failed, but auth flow continues. User will be created when needed."
       );
+    }
+  };
+
+  const loadUserFromDatabase = async (
+    userId: string
+  ): Promise<AuthUser | null> => {
+    try {
+      const dbUser = await userService.getUser(userId);
+      if (dbUser) {
+        return {
+          id: dbUser.id,
+          email: dbUser.email,
+          user_metadata: {
+            full_name: dbUser.full_name,
+            avatar_url: dbUser.avatar_url,
+            phone: dbUser.phone,
+            phone_number: dbUser.phone,
+            name: dbUser.full_name,
+          },
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error("❌ Error loading user from database:", error);
+      return null;
     }
   };
 
@@ -260,6 +287,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const updateUser = (updatedUser: AuthUser): void => {
+    setUser(updatedUser);
+    cacheUser(updatedUser);
+  };
+
+  const refreshUser = async (): Promise<void> => {
+    if (!user) return;
+
+    try {
+      const dbUser = await loadUserFromDatabase(user.id);
+      if (dbUser) {
+        setUser(dbUser);
+        cacheUser(dbUser);
+      }
+    } catch (error) {
+      console.error("❌ Error refreshing user data:", error);
+    }
+  };
+
   const value = useMemo(
     () => ({
       user,
@@ -268,6 +314,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       login,
       loginWithGoogle,
       logout,
+      updateUser,
+      refreshUser,
     }),
     [user, loading]
   );

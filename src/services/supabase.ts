@@ -66,6 +66,22 @@ export type OrderItem = {
   product?: Product;
 };
 
+export type UserAddress = {
+  id: string;
+  user_id: string;
+  name: string;
+  phone: string;
+  address_line_1: string;
+  address_line_2?: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at?: string;
+};
+
 // Products Service
 export const productsService = {
   async getAllProducts(): Promise<Product[]> {
@@ -125,28 +141,28 @@ export const productsService = {
     // Create sample products if none exist
     const sampleProducts = [
       {
-        name: "Devanagari Health Mix",
+        name: "Devanagari Health Mix 200g",
         description:
-          "A premium blend of 21 natural grains, millets, and pulses, carefully crafted to provide complete nutrition.",
-        price: 19.99,
+          "A premium blend of 21 natural grains, millets, and pulses, carefully crafted to provide complete nutrition. This 200g pack is perfect for trying our signature health mix.",
+        price: 200.0,
         image_url: "/src/assets/shop/First page Flipkart.png",
         stock: 100,
         weight: 200,
       },
       {
-        name: "Devanagari Health Mix",
+        name: "Devanagari Health Mix 450g",
         description:
-          "A premium blend of 21 natural grains, millets, and pulses, carefully crafted to provide complete nutrition.",
-        price: 29.99,
+          "A premium blend of 21 natural grains, millets, and pulses, carefully crafted to provide complete nutrition. This 450g pack offers great value for regular consumption.",
+        price: 400.0,
         image_url: "/src/assets/shop/First page Flipkart.png",
         stock: 100,
         weight: 450,
       },
       {
-        name: "Devanagari Health Mix",
+        name: "Devanagari Health Mix 900g",
         description:
-          "A premium blend of 21 natural grains, millets, and pulses, carefully crafted to provide complete nutrition.",
-        price: 49.99,
+          "A premium blend of 21 natural grains, millets, and pulses, carefully crafted to provide complete nutrition. This 900g family pack is perfect for households.",
+        price: 800.0,
         image_url: "/src/assets/shop/First page Flipkart.png",
         stock: 100,
         weight: 900,
@@ -490,13 +506,38 @@ export const ordersService = {
       currency?: string;
     }
   ): Promise<Order> {
+    // If payment_id is provided, check if an order with this payment_id already exists
+    if (paymentData?.payment_id) {
+      const { data: existingOrder, error: checkError } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("payment_id", paymentData.payment_id)
+        .single();
+
+      if (checkError && checkError.code !== "PGRST116") {
+        // PGRST116 is "not found" error, which is expected
+        console.error("Error checking for existing order:", checkError);
+        throw new Error(
+          `Failed to check for existing order: ${checkError.message}`
+        );
+      }
+
+      if (existingOrder) {
+        console.log(
+          "Order with this payment_id already exists:",
+          existingOrder.id
+        );
+        return existingOrder;
+      }
+    }
+
     // Calculate subtotal and total
     const subtotal = cartItems.reduce((sum, item) => {
       return sum + (item.product?.price || 0) * item.quantity;
     }, 0);
 
-    // Calculate shipping (free for orders over $50, otherwise $5.99)
-    const shippingAmount = subtotal >= 50 ? 0 : 5.99;
+    // Calculate shipping (free for orders over ₹500, otherwise ₹50)
+    const shippingAmount = subtotal >= 500 ? 0 : 50;
     const total = subtotal + shippingAmount;
 
     // Create order with payment information
@@ -517,6 +558,9 @@ export const ordersService = {
       currency: paymentData?.currency || "USD",
     };
 
+    console.log("💾 Creating order in database...");
+    console.log("📊 Order data being saved:", orderData);
+
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert(orderData)
@@ -524,11 +568,43 @@ export const ordersService = {
       .single();
 
     if (orderError) {
-      console.error("Error creating order:", orderError);
+      console.error("❌ Error creating order:", orderError);
+
+      // If it's a duplicate key error, try to find the existing order
+      if (
+        orderError.code === "23505" &&
+        orderError.message.includes("orders_order_number_key")
+      ) {
+        console.log(
+          "Duplicate order number detected, attempting to find existing order..."
+        );
+
+        // Try to find an existing order with the same payment_id
+        if (paymentData?.payment_id) {
+          const { data: existingOrder, error: findError } = await supabase
+            .from("orders")
+            .select("*")
+            .eq("payment_id", paymentData.payment_id)
+            .single();
+
+          if (findError && findError.code !== "PGRST116") {
+            throw new Error(
+              `Failed to find existing order: ${findError.message}`
+            );
+          }
+
+          if (existingOrder) {
+            console.log("Found existing order:", existingOrder.id);
+            return existingOrder;
+          }
+        }
+      }
+
       throw new Error(`Failed to create order: ${orderError.message}`);
     }
 
     // Create order items
+    console.log("💾 Creating order items in database...");
     const orderItems = cartItems.map((item) => {
       const productPrice = item.product?.price || 0;
       const quantity = item.quantity;
@@ -544,17 +620,20 @@ export const ordersService = {
       };
     });
 
+    console.log("📊 Order items being saved:", orderItems);
+
     const { error: orderItemsError } = await supabase
       .from("order_items")
       .insert(orderItems);
 
     if (orderItemsError) {
-      console.error("Error creating order items:", orderItemsError);
+      console.error("❌ Error creating order items:", orderItemsError);
       throw new Error(
         `Failed to create order items: ${orderItemsError.message}`
       );
     }
 
+    console.log("✅ Order and order items created successfully!");
     return order;
   },
 
@@ -703,12 +782,14 @@ export const userService = {
       });
 
       // First check if the users table exists by trying a simple select
+      console.log("🔍 Checking if users table exists...");
       const { error: tableCheckError } = await supabase
         .from("users")
         .select("id")
         .limit(1);
 
       if (tableCheckError) {
+        console.error("❌ Table check error:", tableCheckError);
         if (
           tableCheckError.code === "PGRST116" ||
           tableCheckError.message.includes("relation") ||
@@ -721,11 +802,14 @@ export const userService = {
         throw new Error(`Database table error: ${tableCheckError.message}`);
       }
 
+      console.log("✅ Users table exists, proceeding with upsert...");
       const { error } = await supabase.from("users").upsert({
         id: user.id,
         email: user.email,
         full_name: user.name,
         avatar_url: user.avatar_url,
+        last_login: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       });
 
       if (error) {
@@ -748,6 +832,8 @@ export const userService = {
 
         throw new Error(`Failed to create/update user: ${error.message}`);
       }
+
+      console.log("✅ User successfully created/updated in database");
     } catch (error) {
       console.error("❌ User service error:", error);
       throw error;
@@ -789,13 +875,139 @@ export const userService = {
         console.log("User not found in database, creating new user...");
         await this.createOrUpdateUser(user);
       } else {
-        // User exists, update their info
-        console.log("User exists in database, updating info...");
+        // User exists, update their info and last_login
+        console.log("User exists in database, updating info and last_login...");
+        await this.updateUserLastLogin(user.id);
         await this.createOrUpdateUser(user);
       }
     } catch (error) {
       console.error("Error ensuring user exists:", error);
       throw error;
+    }
+  },
+
+  async updateUserLastLogin(userId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from("users")
+        .update({
+          last_login: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", userId);
+
+      if (error) {
+        console.error("Error updating last_login:", error);
+        throw error;
+      }
+
+      console.log("✅ User last_login updated successfully");
+    } catch (error) {
+      console.error("Error updating user last_login:", error);
+      throw error;
+    }
+  },
+};
+
+// Address Service
+export const addressService = {
+  async getUserAddresses(userId: string): Promise<UserAddress[]> {
+    const { data, error } = await supabase
+      .from("user_addresses")
+      .select("*")
+      .eq("user_id", userId)
+      .order("is_default", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching user addresses:", error);
+      throw new Error(`Failed to fetch addresses: ${error.message}`);
+    }
+
+    return data || [];
+  },
+
+  async createAddress(
+    userId: string,
+    addressData: Omit<
+      UserAddress,
+      "id" | "user_id" | "created_at" | "updated_at"
+    >
+  ): Promise<UserAddress> {
+    const { data, error } = await supabase
+      .from("user_addresses")
+      .insert({
+        user_id: userId,
+        ...addressData,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creating address:", error);
+      throw new Error(`Failed to create address: ${error.message}`);
+    }
+
+    return data;
+  },
+
+  async updateAddress(
+    addressId: string,
+    addressData: Partial<
+      Omit<UserAddress, "id" | "user_id" | "created_at" | "updated_at">
+    >
+  ): Promise<UserAddress> {
+    const { data, error } = await supabase
+      .from("user_addresses")
+      .update(addressData)
+      .eq("id", addressId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error updating address:", error);
+      throw new Error(`Failed to update address: ${error.message}`);
+    }
+
+    return data;
+  },
+
+  async deleteAddress(addressId: string): Promise<void> {
+    const { error } = await supabase
+      .from("user_addresses")
+      .delete()
+      .eq("id", addressId);
+
+    if (error) {
+      console.error("Error deleting address:", error);
+      throw new Error(`Failed to delete address: ${error.message}`);
+    }
+  },
+
+  async setDefaultAddress(addressId: string, userId: string): Promise<void> {
+    // First, set all addresses for this user to not default
+    const { error: unsetError } = await supabase
+      .from("user_addresses")
+      .update({ is_default: false })
+      .eq("user_id", userId);
+
+    if (unsetError) {
+      console.error("Error unsetting default addresses:", unsetError);
+      throw new Error(
+        `Failed to unset default addresses: ${unsetError.message}`
+      );
+    }
+
+    // Then set the specified address as default
+    const { error: setError } = await supabase
+      .from("user_addresses")
+      .update({ is_default: true })
+      .eq("id", addressId)
+      .eq("user_id", userId);
+
+    if (setError) {
+      console.error("Error setting default address:", setError);
+      throw new Error(`Failed to set default address: ${setError.message}`);
     }
   },
 };

@@ -187,12 +187,13 @@ const OrderStatus: React.FC = () => {
                         {item.product?.weight}g pack
                       </p>
                       <p className="text-sm font-medium text-[#4A5C3D]">
-                        ${item.product_price.toFixed(2)} × {item.quantity}
+                        ₹{item.product_price.toFixed(2)}{" "}
+                        {order.currency || "INR"} × {item.quantity}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-[#4A5C3D]">
-                        ${item.total_price.toFixed(2)}
+                        ₹{item.total_price.toFixed(2)} {order.currency || "INR"}
                       </p>
                     </div>
                   </div>
@@ -277,7 +278,7 @@ const OrderStatus: React.FC = () => {
                   <div className="flex justify-between text-lg font-bold">
                     <span className="text-[#4A5C3D]">Total:</span>
                     <span className="text-[#A88B67]">
-                      ${order.total.toFixed(2)}
+                      ₹{order.total.toFixed(2)} {order.currency || "INR"}
                     </span>
                   </div>
                 </div>

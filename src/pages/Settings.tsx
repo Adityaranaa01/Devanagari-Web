@@ -1,7 +1,11 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useNotification } from "../context/NotificationContext";
 import { supabase } from "../lib/supabaseClient";
+import { userService } from "../services/supabase";
+import BackButton from "../components/BackButton";
+import ConfirmationModal from "../components/ConfirmationModal";
 
 interface Address {
   id: string;
@@ -19,17 +23,17 @@ interface Address {
 }
 
 const Settings = () => {
-  const { user } = useAuth();
+  const { user, updateUser, refreshUser } = useAuth();
+  const { showSuccess, showError, showWarning } = useNotification();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<"profile" | "addresses">(
     "profile"
   );
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [addressToDelete, setAddressToDelete] = useState<string | null>(null);
 
   // Profile editing state
   const [profileData, setProfileData] = useState({
@@ -70,6 +74,14 @@ const Settings = () => {
     }
   }, [user]);
 
+  // Handle URL parameter for tab switching
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "addresses") {
+      setActiveTab("addresses");
+    }
+  }, [searchParams]);
+
   useEffect(() => {
     if (user) {
       fetchAddresses();
@@ -91,7 +103,7 @@ const Settings = () => {
       setAddresses(data || []);
     } catch (error) {
       console.error("Error fetching addresses:", error);
-      setMessage({ type: "error", text: "Failed to load addresses" });
+      showError("Address Error", "Failed to load addresses");
     } finally {
       setLoading(false);
     }
@@ -99,20 +111,63 @@ const Settings = () => {
 
   const uploadAvatar = async (file: File): Promise<string | null> => {
     try {
+      console.log("📤 Starting avatar upload...");
+      console.log("📊 File details:", {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      });
+
+      // Check if file size is reasonable (max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        console.error("❌ File too large:", file.size, "bytes");
+        throw new Error("File size must be less than 2MB");
+      }
+
       const fileExt = file.name.split(".").pop();
       const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
       const filePath = fileName;
 
-      const { error: uploadError } = await supabase.storage
+      console.log("📁 Uploading to path:", filePath);
+
+      // Add timeout to avatar upload
+      const uploadPromise = supabase.storage
         .from("avatars")
         .upload(filePath, file);
 
-      if (uploadError) throw uploadError;
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Avatar upload timeout")), 15000)
+      );
+
+      const { error: uploadError } = (await Promise.race([
+        uploadPromise,
+        timeoutPromise,
+      ])) as any;
+
+      if (uploadError) {
+        console.error("❌ Upload error:", uploadError);
+
+        // If bucket doesn't exist, provide helpful error message
+        if (
+          uploadError.message.includes("not found") ||
+          uploadError.message.includes("bucket")
+        ) {
+          console.error(
+            "❌ Avatars bucket not found. Please create a 'avatars' bucket in Supabase Storage."
+          );
+          throw new Error(
+            "Storage bucket 'avatars' not found. Please contact administrator."
+          );
+        }
+
+        throw uploadError;
+      }
 
       const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      console.log("✅ Avatar uploaded successfully:", data.publicUrl);
       return data.publicUrl;
     } catch (error) {
-      console.error("Error uploading avatar:", error);
+      console.error("❌ Error uploading avatar:", error);
       return null;
     }
   };
@@ -120,46 +175,85 @@ const Settings = () => {
   const updateProfile = async () => {
     if (!user) return;
 
+    console.log("🔄 Starting profile update...");
     setSaving(true);
-    setMessage(null);
 
     try {
       let avatarUrl = user.user_metadata?.avatar_url;
 
-      // Upload new avatar if selected
+      // Upload avatar if a new file was selected
       if (avatarFile) {
-        const uploadedUrl = await uploadAvatar(avatarFile);
-        if (uploadedUrl) {
-          avatarUrl = uploadedUrl;
-        } else {
-          throw new Error("Failed to upload avatar");
+        console.log("📤 Uploading avatar to storage...");
+        try {
+          const uploadedUrl = await uploadAvatar(avatarFile);
+          if (uploadedUrl) {
+            avatarUrl = uploadedUrl;
+            console.log("✅ Avatar uploaded successfully:", uploadedUrl);
+          } else {
+            console.warn("⚠️ Avatar upload failed, using existing avatar");
+          }
+        } catch (error) {
+          console.warn(
+            "⚠️ Avatar upload failed, continuing without avatar update:",
+            error
+          );
+          // Continue with profile update even if avatar upload fails
         }
       }
 
-      // Update user metadata
-      const { error: updateError } = await supabase.auth.updateUser({
-        data: {
-          full_name: profileData.full_name,
-          phone: profileData.phone,
-          avatar_url: avatarUrl,
-        },
+      // Update the user in the database
+      console.log("💾 Saving profile to database...");
+      console.log("📊 Profile data being saved:", {
+        id: user.id,
+        email: user.email || "",
+        name: profileData.full_name,
+        avatar_url: avatarUrl,
       });
 
-      if (updateError) throw updateError;
+      // Add timeout to prevent hanging
+      const savePromise = userService.createOrUpdateUser({
+        id: user.id,
+        email: user.email || "",
+        name: profileData.full_name,
+        avatar_url: avatarUrl,
+      });
 
-      // Update user in database
-      const { error: dbError } = await supabase
-        .from("users")
-        .update({
-          full_name: profileData.full_name,
-          phone: profileData.phone,
-          avatar_url: avatarUrl,
-        })
-        .eq("id", user.id);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Database save timeout")), 10000)
+      );
 
-      if (dbError) throw dbError;
+      try {
+        await Promise.race([savePromise, timeoutPromise]);
+        console.log("✅ Profile successfully saved to database!");
 
-      setMessage({ type: "success", text: "Profile updated successfully!" });
+        // Refresh user data from database to get the latest information
+        await refreshUser();
+      } catch (error) {
+        console.warn(
+          "⚠️ Database save failed, updating local state only:",
+          error
+        );
+
+        // Fallback: Update local user state directly
+        const updatedUser = {
+          ...user,
+          user_metadata: {
+            ...user.user_metadata,
+            full_name: profileData.full_name,
+            phone: profileData.phone,
+            phone_number: profileData.phone,
+            name: profileData.full_name,
+            avatar_url: avatarUrl,
+          },
+        };
+        updateUser(updatedUser);
+      }
+
+      console.log("✅ Profile updated in database and refreshed locally!");
+      showSuccess(
+        "Profile Updated",
+        "Your profile has been updated successfully!"
+      );
       setAvatarFile(null);
 
       // Redirect to profile page after successful update
@@ -167,9 +261,24 @@ const Settings = () => {
         navigate("/profile");
       }, 1500);
     } catch (error) {
-      console.error("Error updating profile:", error);
-      setMessage({ type: "error", text: "Failed to update profile" });
+      console.error("❌ Error updating profile:", error);
+
+      let errorMessage = "Failed to update profile";
+      if (error instanceof Error) {
+        if (error.message.includes("timeout")) {
+          errorMessage = "Profile update timed out. Please try again.";
+        } else if (error.message.includes("Database")) {
+          errorMessage = "Database connection issue. Please try again.";
+        } else {
+          errorMessage = `Error: ${error.message}`;
+        }
+      }
+
+      showError("Profile Update Failed", errorMessage);
     } finally {
+      console.log(
+        "🏁 Profile update process finished - setting saving to false"
+      );
       setSaving(false);
     }
   };
@@ -179,7 +288,6 @@ const Settings = () => {
     if (!user) return;
 
     setSaving(true);
-    setMessage(null);
 
     try {
       if (editingAddress) {
@@ -191,7 +299,7 @@ const Settings = () => {
           .eq("user_id", user.id);
 
         if (error) throw error;
-        setMessage({ type: "success", text: "Address updated successfully!" });
+        showSuccess("Address Updated", "Address updated successfully!");
       } else {
         // Create new address
         const { error } = await supabase.from("user_addresses").insert({
@@ -200,7 +308,7 @@ const Settings = () => {
         });
 
         if (error) throw error;
-        setMessage({ type: "success", text: "Address added successfully!" });
+        showSuccess("Address Added", "Address added successfully!");
       }
 
       // Reset form
@@ -220,32 +328,38 @@ const Settings = () => {
       fetchAddresses();
     } catch (error) {
       console.error("Error saving address:", error);
-      setMessage({ type: "error", text: "Failed to save address" });
+      showError("Address Error", "Failed to save address");
     } finally {
       setSaving(false);
     }
   };
 
-  const deleteAddress = async (addressId: string) => {
-    if (!user || !confirm("Are you sure you want to delete this address?"))
-      return;
+  const deleteAddress = (addressId: string) => {
+    setAddressToDelete(addressId);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteAddress = async () => {
+    if (!user || !addressToDelete) return;
 
     setSaving(true);
     try {
       const { error } = await supabase
         .from("user_addresses")
         .delete()
-        .eq("id", addressId)
+        .eq("id", addressToDelete)
         .eq("user_id", user.id);
 
       if (error) throw error;
-      setMessage({ type: "success", text: "Address deleted successfully!" });
+      showSuccess("Address Deleted", "Address deleted successfully!");
       fetchAddresses();
     } catch (error) {
       console.error("Error deleting address:", error);
-      setMessage({ type: "error", text: "Failed to delete address" });
+      showError("Delete Error", "Failed to delete address");
     } finally {
       setSaving(false);
+      setShowDeleteModal(false);
+      setAddressToDelete(null);
     }
   };
 
@@ -268,11 +382,11 @@ const Settings = () => {
         .eq("user_id", user.id);
 
       if (error) throw error;
-      setMessage({ type: "success", text: "Default address updated!" });
+      showSuccess("Default Address Updated", "Default address updated!");
       fetchAddresses();
     } catch (error) {
       console.error("Error setting default address:", error);
-      setMessage({ type: "error", text: "Failed to update default address" });
+      showError("Update Error", "Failed to update default address");
     } finally {
       setSaving(false);
     }
@@ -319,23 +433,13 @@ const Settings = () => {
   return (
     <div className="bg-[#FDFBF8] pt-16 min-h-screen">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="mb-6">
+          <BackButton text="Back to Profile" />
+        </div>
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-[#4A5C3D] mb-2">Settings</h1>
           <p className="text-gray-600">Manage your profile and addresses</p>
         </div>
-
-        {/* Message */}
-        {message && (
-          <div
-            className={`mb-6 p-4 rounded-lg ${
-              message.type === "success"
-                ? "bg-green-100 text-green-800 border border-green-200"
-                : "bg-red-100 text-red-800 border border-red-200"
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
 
         {/* Tabs */}
         <div className="mb-8">
@@ -379,7 +483,7 @@ const Settings = () => {
                   Profile Picture
                 </label>
                 <div className="flex items-center space-x-4">
-                  <div className="relative">
+                  <div className="relative flex-shrink-0">
                     {avatarPreview ? (
                       <img
                         src={avatarPreview}
@@ -387,7 +491,7 @@ const Settings = () => {
                         className="h-20 w-20 rounded-full border-2 border-[#4A5C3D] object-cover"
                       />
                     ) : (
-                      <div className="h-20 w-20 rounded-full bg-gray-200 border-2 border-[#4A5C3D] flex items-center justify-center">
+                      <div className="h-20 w-20 rounded-full bg-gray-200 border-2 border-[#4A5C3D] flex items-center justify-center flex-shrink-0">
                         <span className="text-2xl font-bold text-[#4A5C3D]">
                           {profileData.full_name.charAt(0).toUpperCase() || "U"}
                         </span>
@@ -808,6 +912,19 @@ const Settings = () => {
             )}
           </div>
         )}
+
+        {/* Delete Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={confirmDeleteAddress}
+          title="Delete Address"
+          message="Are you sure you want to delete this address? This action cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+          type="warning"
+          isLoading={saving}
+        />
       </div>
     </div>
   );

@@ -20,12 +20,14 @@ import {
 } from "lucide-react";
 import { ordersService } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useNotification } from "../context/NotificationContext";
 import razorpayService from "../services/razorpay";
 import type { Order, OrderItem } from "../services/supabase";
 
 const OrderDetails: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const { user } = useAuth();
+  const { showSuccess, showError, showInfo } = useNotification();
   const navigate = useNavigate();
   const [order, setOrder] = useState<
     (Order & { order_items: OrderItem[] }) | null
@@ -72,7 +74,8 @@ const OrderDetails: React.FC = () => {
       } else {
         // Handle other actions (return, track, etc.)
         await new Promise((resolve) => setTimeout(resolve, 1000));
-        alert(
+        showSuccess(
+          "Request Submitted",
           `${
             action.charAt(0).toUpperCase() + action.slice(1)
           } request submitted successfully!`
@@ -80,7 +83,10 @@ const OrderDetails: React.FC = () => {
       }
     } catch (err) {
       console.error(`Error ${action}ing order:`, err);
-      alert(`Failed to ${action} order. Please try again.`);
+      showError(
+        "Action Failed",
+        `Failed to ${action} order. Please try again.`
+      );
     } finally {
       setActionLoading(null);
     }
@@ -110,7 +116,7 @@ const OrderDetails: React.FC = () => {
     if (!order.payment_id) {
       await ordersService.cancelOrder(order.id);
       await refetchOrder();
-      alert("Order cancelled successfully!");
+      showSuccess("Order Cancelled", "Order cancelled successfully!");
       setTimeout(() => {
         navigate("/profile");
       }, 2000);
@@ -140,7 +146,8 @@ const OrderDetails: React.FC = () => {
       // Refetch order data from database to ensure it's up to date
       await refetchOrder();
 
-      alert(
+      showSuccess(
+        "Order Cancelled",
         `Order cancelled successfully!\n\nRefund ID: ${
           refund.id
         }\nRefund Amount: $${order.total.toFixed(
@@ -162,7 +169,8 @@ const OrderDetails: React.FC = () => {
         // Refetch order data from database
         await refetchOrder();
 
-        alert(
+        showError(
+          "Refund Processing Failed",
           `Order cancelled, but refund processing failed. Please contact support with Order ID: ${order.id}`
         );
 
@@ -177,7 +185,7 @@ const OrderDetails: React.FC = () => {
         // Refetch order data from database
         await refetchOrder();
 
-        alert("Order cancelled successfully!");
+        showSuccess("Order Cancelled", "Order cancelled successfully!");
 
         // Redirect to orders page
         setTimeout(() => {
@@ -524,12 +532,13 @@ const OrderDetails: React.FC = () => {
                         Quantity: {item.quantity}
                       </p>
                       <p className="text-sm font-medium text-[#4A5C3D]">
-                        ${item.product_price.toFixed(2)} each
+                        ₹{item.product_price.toFixed(2)}{" "}
+                        {order.currency || "INR"} each
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-[#4A5C3D]">
-                        ${item.total_price.toFixed(2)}
+                        ₹{item.total_price.toFixed(2)} {order.currency || "INR"}
                       </p>
                     </div>
                   </div>
@@ -632,7 +641,16 @@ const OrderDetails: React.FC = () => {
                           Refund Amount:
                         </span>
                         <p className="text-gray-900 font-semibold">
-                          ${order.refund_amount?.toFixed(2)}
+                          $
+                          {(() => {
+                            const amount = order.refund_amount || 0;
+                            // Convert INR to USD if amount seems to be in INR
+                            const usdToInrRate = 83;
+                            const displayAmount =
+                              amount > 100 ? amount / usdToInrRate : amount;
+                            return displayAmount.toFixed(2);
+                          })()}{" "}
+                          {order.currency || "USD"}
                         </p>
                       </div>
                       <div>
@@ -687,14 +705,15 @@ const OrderDetails: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Subtotal:</span>
                   <span className="text-gray-900">
-                    ${order.subtotal.toFixed(2)}
+                    ₹{order.subtotal.toFixed(2)} {order.currency || "INR"}
                   </span>
                 </div>
 
                 <div className="flex justify-between">
                   <span className="text-gray-600">Shipping:</span>
                   <span className="text-gray-900">
-                    ${order.shipping_amount?.toFixed(2) || "0.00"}
+                    ₹{order.shipping_amount?.toFixed(2) || "0.00"}{" "}
+                    {order.currency || "INR"}
                   </span>
                 </div>
 
@@ -712,7 +731,7 @@ const OrderDetails: React.FC = () => {
                   <div className="flex justify-between text-lg font-bold">
                     <span className="text-[#4A5C3D]">Total:</span>
                     <span className="text-[#A88B67]">
-                      ${order.total.toFixed(2)}
+                      ₹{order.total.toFixed(2)} {order.currency || "INR"}
                     </span>
                   </div>
                 </div>
