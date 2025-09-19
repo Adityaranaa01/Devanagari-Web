@@ -224,6 +224,19 @@ const Contact = () => {
               <Send size={20} />
               <span>Send Message</span>
             </button>
+
+            {/* Terms and Conditions Link */}
+            <div className="text-center pt-4">
+              <p className="text-sm text-gray-600">
+                By submitting this form, you agree to our{" "}
+                <a
+                  href="/terms"
+                  className="text-[#4A5C3D] hover:text-[#3a4a2f] underline font-medium transition-colors"
+                >
+                  Terms and Conditions
+                </a>
+              </p>
+            </div>
           </form>
         </div>
       </div>

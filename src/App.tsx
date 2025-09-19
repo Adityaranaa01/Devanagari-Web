@@ -10,6 +10,7 @@ import Shop from "./pages/Shop";
 import Cart from "./pages/Cart";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
+import Terms from "./pages/Terms";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import OrderDetails from "./pages/OrderDetails";
@@ -124,6 +125,18 @@ function App() {
                         <Navbar />
                         <main className="flex-1">
                           <Contact />
+                        </main>
+                        <Footer />
+                      </>
+                    }
+                  />
+                  <Route
+                    path="/terms"
+                    element={
+                      <>
+                        <Navbar />
+                        <main className="flex-1">
+                          <Terms />
                         </main>
                         <Footer />
                       </>
