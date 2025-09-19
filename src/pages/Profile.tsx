@@ -87,16 +87,25 @@ const Profile = () => {
                 src={user.user_metadata.avatar_url}
                 alt={user.user_metadata.full_name || "User"}
                 className="h-16 w-16 rounded-full border-2 border-[#4A5C3D] shadow-lg object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                  e.currentTarget.nextElementSibling?.classList.remove(
+                    "hidden"
+                  );
+                }}
               />
-            ) : (
-              <div className="h-16 w-16 rounded-full bg-gray-200 border-2 border-[#4A5C3D] flex items-center justify-center flex-shrink-0">
-                <span className="text-2xl font-bold text-[#4A5C3D]">
-                  {(user.user_metadata?.full_name || user.email || "U")
-                    .charAt(0)
-                    .toUpperCase()}
-                </span>
-              </div>
-            )}
+            ) : null}
+            <div
+              className={`h-16 w-16 rounded-full bg-gray-200 border-2 border-[#4A5C3D] flex items-center justify-center flex-shrink-0 ${
+                user.user_metadata?.avatar_url ? "hidden" : ""
+              }`}
+            >
+              <span className="text-2xl font-bold text-[#4A5C3D]">
+                {(user.user_metadata?.full_name || user.email || "U")
+                  .charAt(0)
+                  .toUpperCase()}
+              </span>
+            </div>
             <div className="min-w-0 flex-1">
               <div className="text-2xl sm:text-3xl font-bold text-[#4A5C3D] truncate">
                 {user.user_metadata?.full_name || "User"}

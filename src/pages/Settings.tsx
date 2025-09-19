@@ -489,14 +489,23 @@ const Settings = () => {
                         src={avatarPreview}
                         alt="Profile"
                         className="h-20 w-20 rounded-full border-2 border-[#4A5C3D] object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                          e.currentTarget.nextElementSibling?.classList.remove(
+                            "hidden"
+                          );
+                        }}
                       />
-                    ) : (
-                      <div className="h-20 w-20 rounded-full bg-gray-200 border-2 border-[#4A5C3D] flex items-center justify-center flex-shrink-0">
-                        <span className="text-2xl font-bold text-[#4A5C3D]">
-                          {profileData.full_name.charAt(0).toUpperCase() || "U"}
-                        </span>
-                      </div>
-                    )}
+                    ) : null}
+                    <div
+                      className={`h-20 w-20 rounded-full bg-gray-200 border-2 border-[#4A5C3D] flex items-center justify-center flex-shrink-0 ${
+                        avatarPreview ? "hidden" : ""
+                      }`}
+                    >
+                      <span className="text-2xl font-bold text-[#4A5C3D]">
+                        {profileData.full_name.charAt(0).toUpperCase() || "U"}
+                      </span>
+                    </div>
                   </div>
                   <div>
                     <input

@@ -218,12 +218,25 @@ const Navbar = () => {
                       src={user.user_metadata.avatar_url}
                       alt={user.user_metadata.full_name || "User avatar"}
                       className="h-8 w-8 rounded-full border border-gray-200"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                        e.currentTarget.nextElementSibling?.classList.remove(
+                          "hidden"
+                        );
+                      }}
                     />
-                  ) : (
-                    <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-                      <User size={16} className="text-gray-600" />
-                    </div>
-                  )}
+                  ) : null}
+                  <div
+                    className={`h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center ${
+                      user.user_metadata?.avatar_url ? "hidden" : ""
+                    }`}
+                  >
+                    <span className="text-sm font-bold text-gray-600">
+                      {(user.user_metadata?.full_name || user.email || "U")
+                        .charAt(0)
+                        .toUpperCase()}
+                    </span>
+                  </div>
                   <span className="text-sm text-gray-700 group-hover:text-[#4A5C3D]">
                     {user.user_metadata?.full_name || user.email}
                   </span>
@@ -348,12 +361,25 @@ const Navbar = () => {
                         src={user.user_metadata.avatar_url}
                         alt={user.user_metadata.full_name || "User avatar"}
                         className="h-8 w-8 rounded-full border border-gray-200"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                          e.currentTarget.nextElementSibling?.classList.remove(
+                            "hidden"
+                          );
+                        }}
                       />
-                    ) : (
-                      <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-                        <User size={16} className="text-gray-600" />
-                      </div>
-                    )}
+                    ) : null}
+                    <div
+                      className={`h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center ${
+                        user.user_metadata?.avatar_url ? "hidden" : ""
+                      }`}
+                    >
+                      <span className="text-sm font-bold text-gray-600">
+                        {(user.user_metadata?.full_name || user.email || "U")
+                          .charAt(0)
+                          .toUpperCase()}
+                      </span>
+                    </div>
                     <span className="text-sm text-gray-700 flex-1 text-left">
                       {user.user_metadata?.full_name || user.email}
                     </span>

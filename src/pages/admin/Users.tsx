@@ -529,12 +529,25 @@ const Users: React.FC = () => {
                                 className="h-10 w-10 rounded-full object-cover"
                                 src={user.avatar_url}
                                 alt={user.name}
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                  e.currentTarget.nextElementSibling?.classList.remove(
+                                    "hidden"
+                                  );
+                                }}
                               />
-                            ) : (
-                              <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                                <UserCheck className="h-5 w-5 text-gray-600" />
-                              </div>
-                            )}
+                            ) : null}
+                            <div
+                              className={`h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center ${
+                                user.avatar_url ? "hidden" : ""
+                              }`}
+                            >
+                              <span className="text-sm font-bold text-gray-600">
+                                {(user.name || user.email || "U")
+                                  .charAt(0)
+                                  .toUpperCase()}
+                              </span>
+                            </div>
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">
@@ -657,12 +670,25 @@ const Users: React.FC = () => {
                         className="h-16 w-16 rounded-full object-cover"
                         src={selectedUser.avatar_url}
                         alt={selectedUser.name}
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                          e.currentTarget.nextElementSibling?.classList.remove(
+                            "hidden"
+                          );
+                        }}
                       />
-                    ) : (
-                      <div className="h-16 w-16 rounded-full bg-gray-300 flex items-center justify-center">
-                        <UserCheck className="h-8 w-8 text-gray-600" />
-                      </div>
-                    )}
+                    ) : null}
+                    <div
+                      className={`h-16 w-16 rounded-full bg-gray-300 flex items-center justify-center ${
+                        selectedUser.avatar_url ? "hidden" : ""
+                      }`}
+                    >
+                      <span className="text-2xl font-bold text-gray-600">
+                        {(selectedUser.name || selectedUser.email || "U")
+                          .charAt(0)
+                          .toUpperCase()}
+                      </span>
+                    </div>
                     <div>
                       <h4 className="text-lg font-medium text-gray-900">
                         {selectedUser.name || "No name"}

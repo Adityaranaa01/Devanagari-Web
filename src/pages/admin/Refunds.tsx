@@ -23,17 +23,17 @@ interface RefundOrder {
   total: number;
   status: string;
   payment_status: string;
-  payment_id: string;
-  refund_id: string;
-  refund_amount: number;
-  refund_reason: string;
-  refund_status: "pending" | "processed" | "failed";
-  refunded_at: string;
+  payment_id?: string | null;
+  refund_id?: string | null;
+  refund_amount?: number | null;
+  refund_reason?: string | null;
+  refund_status?: "pending" | "processed" | "failed" | null;
+  refunded_at?: string | null;
   created_at: string;
-  user: {
-    name: string;
-    email: string;
-  };
+  user?: {
+    name?: string | null;
+    email?: string | null;
+  } | null;
 }
 
 const Refunds: React.FC = () => {
@@ -145,7 +145,7 @@ const Refunds: React.FC = () => {
     }
   };
 
-  const getRefundStatusIcon = (status: string) => {
+  const getRefundStatusIcon = (status: string | null | undefined) => {
     switch (status) {
       case "processed":
         return <CheckCircle className="h-4 w-4 text-green-500" />;
@@ -158,7 +158,7 @@ const Refunds: React.FC = () => {
     }
   };
 
-  const getRefundStatusColor = (status: string) => {
+  const getRefundStatusColor = (status: string | null | undefined) => {
     switch (status) {
       case "processed":
         return "bg-green-100 text-green-800";
@@ -173,10 +173,14 @@ const Refunds: React.FC = () => {
 
   const filteredRefunds = refunds.filter((refund) => {
     const matchesSearch =
-      refund.refund_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      refund.refund_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      false ||
       refund.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      false ||
       refund.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      refund.payment_id.toLowerCase().includes(searchTerm.toLowerCase());
+      false ||
+      refund.payment_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      false;
 
     const matchesStatus =
       statusFilter === "all" || refund.refund_status === statusFilter;
@@ -435,7 +439,9 @@ const Refunds: React.FC = () => {
               {filteredRefunds.map((refund) => (
                 <tr key={refund.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                    {refund.refund_id.slice(0, 12)}...
+                    {refund.refund_id
+                      ? `${refund.refund_id.slice(0, 12)}...`
+                      : "N/A"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -473,7 +479,7 @@ const Refunds: React.FC = () => {
                     >
                       {getRefundStatusIcon(refund.refund_status)}
                       <span className="ml-1 capitalize">
-                        {refund.refund_status}
+                        {refund.refund_status || "unknown"}
                       </span>
                     </span>
                   </td>
@@ -512,7 +518,10 @@ const Refunds: React.FC = () => {
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                  Refund Details - {selectedRefund.refund_id.slice(0, 12)}...
+                  Refund Details -{" "}
+                  {selectedRefund.refund_id
+                    ? `${selectedRefund.refund_id.slice(0, 12)}...`
+                    : "N/A"}
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -538,7 +547,8 @@ const Refunds: React.FC = () => {
                     </h4>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <p>
-                        <strong>Refund ID:</strong> {selectedRefund.refund_id}
+                        <strong>Refund ID:</strong>{" "}
+                        {selectedRefund.refund_id || "N/A"}
                       </p>
                       <p>
                         <strong>Amount:</strong> $
@@ -562,7 +572,8 @@ const Refunds: React.FC = () => {
                         </span>
                       </p>
                       <p>
-                        <strong>Reason:</strong> {selectedRefund.refund_reason}
+                        <strong>Reason:</strong>{" "}
+                        {selectedRefund.refund_reason || "N/A"}
                       </p>
                       <p>
                         <strong>Refunded At:</strong>{" "}
