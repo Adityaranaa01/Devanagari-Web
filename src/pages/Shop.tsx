@@ -229,16 +229,10 @@ const Shop = () => {
         {/* Free Delivery Banner */}
         <div className="bg-gradient-to-r from-[#4A5C3D] to-[#3a4a2f] rounded-xl p-4 mb-8 text-center text-white shadow-lg">
           <div className="flex items-center justify-center space-x-2">
-            <div className="w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-              <span className="text-lg">🚚</span>
-            </div>
-            <div>
-              <h3 className="text-lg font-bold">Free Delivery in Davangere!</h3>
-              <p className="text-sm opacity-90">
-                Enjoy free delivery on all orders within Davangere. Other
-                locations: ₹99 shipping
-              </p>
-            </div>
+            <h3 className="text-lg font-bold flex items-center space-x-2">
+              <span>🚚</span>
+              <span>Free Delivery in Davangere!</span>
+            </h3>
           </div>
         </div>
 
