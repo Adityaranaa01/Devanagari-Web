@@ -18,7 +18,8 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
-    "razorpay": "^2.9.6"
+    "razorpay": "^2.9.6",
+    "@supabase/supabase-js": "^2.39.0"
   },
   "keywords": [],
   "type": "commonjs"

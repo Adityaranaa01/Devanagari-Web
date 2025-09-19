@@ -552,35 +552,85 @@ app.use((error, req, res, next) => {
 // Validate Promo Code
 app.post('/api/promo/validate', async (req, res) => {
   try {
-    const { code } = req.body;
+    const { code, orderAmount = 0 } = req.body;
 
     if (!code) {
       return res.status(400).json({ error: 'Promo code is required' });
     }
 
-    // Valid promo codes (in a real app, this would be in a database)
-    const validCodes = {
-      'WELCOME10': { discount: 10, type: 'percentage', description: '10% off on your first order' },
-      'SAVE20': { discount: 20, type: 'percentage', description: '20% off on orders above ₹500' },
-      'FREESHIP': { discount: 0, type: 'shipping', description: 'Free shipping on orders above ₹300' },
-      'NEWUSER': { discount: 15, type: 'percentage', description: '15% off for new users' }
-    };
+    // Import Supabase client
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
 
-    const promoCode = validCodes[code.toUpperCase()];
+    // Query promo code from database
+    const { data: promoCode, error } = await supabase
+      .from('promo_codes')
+      .select('*')
+      .eq('code', code.toUpperCase())
+      .eq('is_active', true)
+      .single();
 
-    if (!promoCode) {
+    if (error || !promoCode) {
       return res.status(400).json({
         error: 'Invalid promo code',
         valid: false
       });
     }
 
+    // Check if promo code is within validity period
+    const now = new Date();
+    const validFrom = new Date(promoCode.valid_from);
+    const validUntil = promoCode.valid_until ? new Date(promoCode.valid_until) : null;
+
+    if (now < validFrom || (validUntil && now > validUntil)) {
+      return res.status(400).json({
+        error: 'Promo code is not valid at this time',
+        valid: false
+      });
+    }
+
+    // Check if promo code has reached usage limit
+    if (promoCode.usage_limit && promoCode.used_count >= promoCode.usage_limit) {
+      return res.status(400).json({
+        error: 'Promo code has reached its usage limit',
+        valid: false
+      });
+    }
+
+    // Check minimum order amount
+    if (orderAmount < promoCode.min_order_amount) {
+      return res.status(400).json({
+        error: `Minimum order amount of ₹${promoCode.min_order_amount} required for this promo code`,
+        valid: false
+      });
+    }
+
+    // Calculate discount amount
+    let discountAmount = 0;
+    if (promoCode.discount_type === 'percentage') {
+      discountAmount = (orderAmount * promoCode.discount_value) / 100;
+      // Apply max discount limit if set
+      if (promoCode.max_discount_amount && discountAmount > promoCode.max_discount_amount) {
+        discountAmount = promoCode.max_discount_amount;
+      }
+    } else if (promoCode.discount_type === 'fixed') {
+      discountAmount = promoCode.discount_value;
+    } else if (promoCode.discount_type === 'shipping') {
+      discountAmount = 0; // Free shipping
+    }
+
     res.json({
       valid: true,
-      code: code.toUpperCase(),
-      discount: promoCode.discount,
-      type: promoCode.type,
-      description: promoCode.description
+      code: promoCode.code,
+      discount: promoCode.discount_value,
+      type: promoCode.discount_type,
+      description: promoCode.description,
+      discountAmount: Math.round(discountAmount * 100) / 100, // Round to 2 decimal places
+      minOrderAmount: promoCode.min_order_amount,
+      maxDiscountAmount: promoCode.max_discount_amount
     });
 
   } catch (error) {
